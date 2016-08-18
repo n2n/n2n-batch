@@ -24,7 +24,7 @@ namespace n2n\batch;
 use n2n\io\CouldNotAchieveFlockException;
 use n2n\util\UnserializationFailedException;
 use n2n\util\DateUtils;
-use n2n\http\controller\ControllerErrorException;
+use n2n\web\http\controller\ControllerErrorException;
 use n2n\util\StringUtils;
 use n2n\io\fs\FileResourceStream;
 use n2n\io\IoUtils;
