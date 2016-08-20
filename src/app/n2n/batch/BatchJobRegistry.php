@@ -21,16 +21,9 @@
  */
 namespace n2n\batch;
 
-use n2n\io\CouldNotAchieveFlockException;
-use n2n\util\UnserializationFailedException;
 use n2n\util\DateUtils;
 use n2n\web\http\controller\ControllerErrorException;
-use n2n\util\StringUtils;
-use n2n\io\fs\FileResourceStream;
-use n2n\io\IoUtils;
 use n2n\util\ex\NotYetImplementedException;
-use n2n\context\LookupManager;
-use n2n\reflection\ReflectionUtils;
 use n2n\util\DateParseException;
 use n2n\core\config\GeneralConfig;
 use n2n\core\container\N2nContext;
@@ -38,8 +31,6 @@ use n2n\context\ThreadScoped;
 use n2n\reflection\magic\MagicObjectUnavailableException;
 use n2n\core\Sync;
 use n2n\reflection\magic\MagicMethodInvoker;
-use n2n\reflection\ReflectionContext;
-use n2n\reflection\CastUtils;
 use n2n\util\config\source\impl\CacheStoreConfigSource;
 
 class BatchJobRegistry implements ThreadScoped {
@@ -121,27 +112,27 @@ class BatchJobRegistry implements ThreadScoped {
 		}
 	}
 	
-	private function readLastTriggeredTimestamps(FileResourceStream $fileStream) {
-		$lastTriggeredTimestamps = null;
+// 	private function readLastTriggeredTimestamps(FileResourceStream $fileStream) {
+// 		$lastTriggeredTimestamps = null;
 		
-		try {
-			$lastTriggeredTimestamps = StringUtils::unserialize($fileStream->read());
-		} catch (UnserializationFailedException $e) {
-		}
+// 		try {
+// 			$lastTriggeredTimestamps = StringUtils::unserialize($fileStream->read());
+// 		} catch (UnserializationFailedException $e) {
+// 		}
 		
-		if (!is_array($lastTriggeredTimestamps) || !isset($lastTriggeredTimestamps[self::DATETIME_TRIGGERED_KEY])
-				|| !isset($lastTriggeredTimestamps[self::DATEINTERVAL_TRIGGERED_KEY])
-				|| !is_array($lastTriggeredTimestamps[self::DATEINTERVAL_TRIGGERED_KEY])) {
-			$lastTriggeredTimestamps = array(self::DATETIME_TRIGGERED_KEY => null, self::DATEINTERVAL_TRIGGERED_KEY => array());
-		}
+// 		if (!is_array($lastTriggeredTimestamps) || !isset($lastTriggeredTimestamps[self::DATETIME_TRIGGERED_KEY])
+// 				|| !isset($lastTriggeredTimestamps[self::DATEINTERVAL_TRIGGERED_KEY])
+// 				|| !is_array($lastTriggeredTimestamps[self::DATEINTERVAL_TRIGGERED_KEY])) {
+// 			$lastTriggeredTimestamps = array(self::DATETIME_TRIGGERED_KEY => null, self::DATEINTERVAL_TRIGGERED_KEY => array());
+// 		}
 		
-		return $lastTriggeredTimestamps;
-	}
+// 		return $lastTriggeredTimestamps;
+// 	}
 	
-	private function writeLastTriggeredTimestamps(FileResourceStream $fileStream, array $lastTriggeredTimestamps) {
-		$fileStream->truncate();
-		$fileStream->write(serialize($lastTriggeredTimestamps));
-	}
+// 	private function writeLastTriggeredTimestamps(FileResourceStream $fileStream, array $lastTriggeredTimestamps) {
+// 		$fileStream->truncate();
+// 		$fileStream->write(serialize($lastTriggeredTimestamps));
+// 	}
 	/**
 	 * 
 	 * @param \DateTime $now
