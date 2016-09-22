@@ -33,14 +33,15 @@ use n2n\core\Sync;
 use n2n\reflection\magic\MagicMethodInvoker;
 use n2n\util\config\source\impl\CacheStoreConfigSource;
 
+/**
+ * Manages and or organizes the execution of all active batch jobs.
+ *
+ */
 class BatchJobRegistry implements ThreadScoped {
-	
 	private $batchJobLookupIds;
 	private $n2nContext;
-	
 
 	const BATCH_FILE_NAME = 'datetime.ser';
-	
 	
 	private function _init(GeneralConfig $generalConfig, N2nContext $n2nContext) {
 		$this->batchJobLookupIds = $generalConfig->getBatchJobLookupIds();
@@ -49,12 +50,12 @@ class BatchJobRegistry implements ThreadScoped {
 	}
 	
 	/**
-	 * 
 	 * @param \ReflectionClass $class
 	 */
 	public function registerBatchJobLookupId(string $lookupId) {
 		$this->batchJobLookupIds[] = $lookupId;
 	}
+	
 	/**
 	 * 
 	 */
@@ -81,12 +82,20 @@ class BatchJobRegistry implements ThreadScoped {
 		$lock->release();
 	}
 	
+	/**
+	 * @return \n2n\batch\TriggerTracker
+	 */
 	private function createTriggerTracker() {
 		return new TriggerTracker(new CacheStoreConfigSource(
 				$this->n2nContext->getAppCache()->lookupCacheStore(TriggerTracker::class),
 				self::BATCH_FILE_NAME));
 	}
 	
+	/**
+	 * @param object $batchJob
+	 * @param string $lookupId
+	 * @param TriggerTracker $triggerTracker
+	 */
 	private function triggerBatchJob($batchJob, string $lookupId, TriggerTracker $triggerTracker) {
 		$now = new \DateTime();
 		$magicMethodInvoker = new MagicMethodInvoker($this->n2nContext);
@@ -99,10 +108,11 @@ class BatchJobRegistry implements ThreadScoped {
 		$triggerInvestigator->check(TriggerInvestigator::NEW_MONTH_METHOD, 'Y-m');
 		$triggerInvestigator->check(TriggerInvestigator::NEW_YEAR_METHOD, 'Y');
 		$triggerInvestigator->checkIntervals();
-		
-		
 	}
 	
+	/**
+	 * 
+	 */
 	private function triggerRequestListeners() {
 		foreach ($this->batchJobLookupIds as $batchControllerClass) {
 			if (!$batchControllerClass->implementsInterface('n2n\batch\RequestListener')) continue;
@@ -133,68 +143,69 @@ class BatchJobRegistry implements ThreadScoped {
 // 		$fileStream->truncate();
 // 		$fileStream->write(serialize($lastTriggeredTimestamps));
 // 	}
-	/**
-	 * 
-	 * @param \DateTime $now
-	 * @param array $lastTriggeredTimestamps
-	 */				 
-	private function checkDateIntervalListeners(\DateTime $now, array &$lastTriggeredTimestamps) {
-		foreach ($this->batchJobLookupIds as $batchControllerClass) {
-			if (!$batchControllerClass->implementsInterface('n2n\batch\DateIntervalListener')) {
-				continue;
-			}
+// 	/**
+// 	 * 
+// 	 * @param \DateTime $now
+// 	 * @param array $lastTriggeredTimestamps
+// 	 */				 
+// 	private function checkDateIntervalListeners(\DateTime $now, array &$lastTriggeredTimestamps) {
+// 		foreach ($this->batchJobLookupIds as $batchControllerClass) {
+// 			if (!$batchControllerClass->implementsInterface('n2n\batch\DateIntervalListener')) {
+// 				continue;
+// 			}
 			
-			if (isset($lastTriggeredTimestamps[$batchControllerClass->getName()]) 
-					&& !$this->isDateIntervalPassed($batchControllerClass, $now, 
-							$lastTriggeredTimestamps[$batchControllerClass->getName()])) {
-				continue;
-			}
+// 			if (isset($lastTriggeredTimestamps[$batchControllerClass->getName()]) 
+// 					&& !$this->isDateIntervalPassed($batchControllerClass, $now, 
+// 							$lastTriggeredTimestamps[$batchControllerClass->getName()])) {
+// 				continue;
+// 			}
 			
-			$this->usableManager->lookupByClass($batchControllerClass)->timePassed();
-			$lastTriggeredTimestamps[$batchControllerClass->getName()] = $now->getTimestamp();
-		}
-	}
-	/**
-	 * 
-	 * @param unknown_type $batchControllerClass
-	 * @param \DateTime $now
-	 * @param unknown_type $lastTriggeredTimestamp
-	 * @throws ControllerErrorException
-	 */
-	private function isDateIntervalPassed($batchControllerClass, \DateTime $now, $lastTriggeredTimestamp) {
-		throw new NotYetImplementedException();
-		
-// 		$annotationAnalyzer = ReflectionContext::getAnnotationAnalyzer($batchControllerClass);
-// 		$dateInterval = null;
-		
-// 		try {
-// 			$intervalSpec = $annotationAnalyzer->getClassAnnotationValue(self::DATEINTERVAL_ANNOTATION_NAME);
-// 			$dateInterval = DateUtils::createDateInterval($intervalSpec);
-// 		} catch (AnnotationNotFoundException $e) {
-// 			throw new ControllerErrorException(
-// 					SysTextUtils::get('n2n_error_cont_dateinterval_listeners_requires_annotation',
-// 							array('class' => $batchControllerClass->getName(), 'annotation' => self::DATEINTERVAL_ANNOTATION_NAME)),
-// 					0, E_USER_ERROR, $batchControllerClass->getFileName(), $batchControllerClass->getStartLine(), null, null, $e);
-// 		} catch (DateIntervalParsingFailedException $e) {
-// 			throw new ControllerErrorException(
-// 					SysTextUtils::get('n2n_error_cont_invalid_annotated_dateinterval',
-// 							array('class' => $batchControllerClass->getName(), 'annotation' => self::DATEINTERVAL_ANNOTATION_NAME, 'dateInterval' => $intervalSpec)),
-// 					0, E_USER_ERROR, $batchControllerClass->getFileName(), $batchControllerClass->getStartLine(), null, null, $e);
+// 			$this->usableManager->lookupByClass($batchControllerClass)->timePassed();
+// 			$lastTriggeredTimestamps[$batchControllerClass->getName()] = $now->getTimestamp();
 // 		}
+// 	}
+// 	/**
+// 	 * 
+// 	 * @param unknown_type $batchControllerClass
+// 	 * @param \DateTime $now
+// 	 * @param unknown_type $lastTriggeredTimestamp
+// 	 * @return bool
+// 	 * @throws ControllerErrorException
+// 	 */
+// 	private function isDateIntervalPassed($batchControllerClass, \DateTime $now, $lastTriggeredTimestamp) {
+// 		throw new NotYetImplementedException();
 		
-// 		$lastMod = null;
-// 		try {
-// 			$lastMod = DateUtils::createDateTime('@' . $lastTriggeredTimestamp);
-// 		} catch (DateTimeParsingFailedException $e) {
-// 			return true;
-// 		}
+// // 		$annotationAnalyzer = ReflectionContext::getAnnotationAnalyzer($batchControllerClass);
+// // 		$dateInterval = null;
 		
-// 		if (is_null($lastMod) && $lastMod->add($dateInterval) < $now) {
-// 			return true;
-// 		}
+// // 		try {
+// // 			$intervalSpec = $annotationAnalyzer->getClassAnnotationValue(self::DATEINTERVAL_ANNOTATION_NAME);
+// // 			$dateInterval = DateUtils::createDateInterval($intervalSpec);
+// // 		} catch (AnnotationNotFoundException $e) {
+// // 			throw new ControllerErrorException(
+// // 					SysTextUtils::get('n2n_error_cont_dateinterval_listeners_requires_annotation',
+// // 							array('class' => $batchControllerClass->getName(), 'annotation' => self::DATEINTERVAL_ANNOTATION_NAME)),
+// // 					0, E_USER_ERROR, $batchControllerClass->getFileName(), $batchControllerClass->getStartLine(), null, null, $e);
+// // 		} catch (DateIntervalParsingFailedException $e) {
+// // 			throw new ControllerErrorException(
+// // 					SysTextUtils::get('n2n_error_cont_invalid_annotated_dateinterval',
+// // 							array('class' => $batchControllerClass->getName(), 'annotation' => self::DATEINTERVAL_ANNOTATION_NAME, 'dateInterval' => $intervalSpec)),
+// // 					0, E_USER_ERROR, $batchControllerClass->getFileName(), $batchControllerClass->getStartLine(), null, null, $e);
+// // 		}
 		
-// 		return false;
-	}
+// // 		$lastMod = null;
+// // 		try {
+// // 			$lastMod = DateUtils::createDateTime('@' . $lastTriggeredTimestamp);
+// // 		} catch (DateTimeParsingFailedException $e) {
+// // 			return true;
+// // 		}
+		
+// // 		if (is_null($lastMod) && $lastMod->add($dateInterval) < $now) {
+// // 			return true;
+// // 		}
+		
+// // 		return false;
+// 	}
 	/**
 	 * 
 	 * @param \DateTime $now
