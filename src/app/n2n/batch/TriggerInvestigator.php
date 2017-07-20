@@ -21,7 +21,6 @@
  */
 namespace n2n\batch;
 
-use n2n\reflection\magic\MagicContext;
 use n2n\reflection\magic\MagicMethodInvoker;
 use n2n\reflection\ReflectionContext;
 use n2n\reflection\CastUtils;
