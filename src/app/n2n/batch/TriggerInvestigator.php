@@ -33,6 +33,8 @@ class TriggerInvestigator {
 	const NEW_MONTH_METHOD = '_onNewMonth';
 	const NEW_YEAR_METHOD = '_onNewYear';
 	
+	const LAST_TRIGGERED_ARG = 'lastTriggered';
+	
 	private $triggerTracker;
 	private $magicMethodInvoker;
 	private $batchJob;
@@ -40,7 +42,7 @@ class TriggerInvestigator {
 	private $lookupId;
 	private $now;
 	
-	public function __construct(TriggerTracker $triggerTracker, MagicMethodInvoker $magicMethodInvoker, $batchJob, 
+	public function __construct(TriggerTracker $triggerTracker, MagicMethodInvoker $magicMethodInvoker, $batchJob,
 			string $lookupId, \DateTime $now) {
 		$this->triggerTracker = $triggerTracker;
 		$this->magicMethodInvoker = $magicMethodInvoker;
@@ -54,14 +56,15 @@ class TriggerInvestigator {
 		if (!$this->class->hasMethod($methodName)) return;
 		
 		$lastTriggered = $this->triggerTracker->getLastTriggered($this->lookupId, $methodName);
-
-		if ($lastTriggered === null || $dtCheckFormat === null 
+		
+		if ($lastTriggered === null || $dtCheckFormat === null
 				|| $lastTriggered->format($dtCheckFormat) != $this->now->format($dtCheckFormat)) {
 			$method = $this->class->getMethod($methodName);
 			$method->setAccessible(true);
+			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, $lastTriggered);
 			$this->magicMethodInvoker->setMethod($method);
 			$this->magicMethodInvoker->invoke($this->batchJob);
-				
+			
 			$this->triggerTracker->setLastTriggered($this->lookupId, $methodName, $this->now);
 		}
 	}
@@ -82,6 +85,7 @@ class TriggerInvestigator {
 			}
 			
 			$method->setAccessible(true);
+			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, $lastTriggered);
 			$this->magicMethodInvoker->setMethod($method);
 			$this->magicMethodInvoker->invoke($this->batchJob);
 			
