@@ -21,7 +21,6 @@
  */
 namespace n2n\batch;
 
-use n2n\util\config\source\ConfigSource;
 use n2n\util\config\source\WritableConfigSource;
 use n2n\util\DateUtils;
 

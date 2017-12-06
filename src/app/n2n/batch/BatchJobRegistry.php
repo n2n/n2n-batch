@@ -208,7 +208,7 @@ class BatchJobRegistry implements ThreadScoped {
 	/**
 	 * 
 	 * @param \DateTime $now
-	 * @param unknown_type $lastTriggeredTimestamp
+	 * @param int $lastTriggeredTimestamp
 	 */
 	private function checkDateTimeListeners(\DateTime $now, &$lastTriggeredTimestamp) {
 		$lastMod = null;
@@ -291,8 +291,8 @@ class BatchJobRegistry implements ThreadScoped {
 	}
 	/**
 	 * 
-	 * @param unknown_type $path
-	 * @param unknown_type $pattern
+	 * @param string $path
+	 * @param string $pattern
 	 * @return bool
 	 */
 	public function check($path, $pattern) {
