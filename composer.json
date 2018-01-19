@@ -4,12 +4,12 @@
     "description": "batch job support for n2n framework",
     "keywords": ["n2n","batch job"],
     "homepage": "http://n2n.rocks/",
-    "license": "GNU LGPL",
+    "license": "LGPL-3.0-or-later",
     "authors": [
         {
             "name": "Andreas von Burg",
             "email": "a@von-burg.net",
-            "homepage": "http://andreas.von-burg.net"
+            "homepage": "https://andreas.von-burg.net/"
         }
     ],
     "require": {
