@@ -23,7 +23,7 @@ namespace n2n\batch;
 
 use n2n\reflection\magic\MagicMethodInvoker;
 use n2n\reflection\ReflectionContext;
-use n2n\reflection\CastUtils;
+use n2n\util\type\CastUtils;
 
 class TriggerInvestigator {
 	const ON_TRIGGER_METHOD = '_onTrigger';

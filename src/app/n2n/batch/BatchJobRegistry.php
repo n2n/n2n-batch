@@ -26,7 +26,7 @@ use n2n\util\DateParseException;
 use n2n\core\config\GeneralConfig;
 use n2n\core\container\N2nContext;
 use n2n\context\ThreadScoped;
-use n2n\reflection\magic\MagicObjectUnavailableException;
+use n2n\util\magic\MagicObjectUnavailableException;
 use n2n\core\Sync;
 use n2n\reflection\magic\MagicMethodInvoker;
 use n2n\util\config\source\impl\CacheStoreConfigSource;
