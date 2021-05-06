@@ -29,6 +29,11 @@
 			"n2n\\batch\\" : "src/app/n2n/batch"
 		}
 	},
+	"autoload-dev" : {
+		"psr-4" : {
+			"n2n\\batch\\" : "src/test/n2n/batch"
+		}
+	},
 	"require-dev" : {
 		"phpunit/phpunit" : "^9.5"
 	}
