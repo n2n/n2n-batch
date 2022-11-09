@@ -21,7 +21,7 @@
 	},
 	"require" : {
 		"php" : ">=7.0",
-		"n2n/n2n-reflection" : "~7.2.36",
+		"n2n/n2n-reflection" : "~7.2.37",
 		"n2n/n2n-util" : "~7.2.36"
 	},
 	"autoload" : {
