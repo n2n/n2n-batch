@@ -20,8 +20,8 @@
 		"vendor-dir" : "src/vendor"
 	},
 	"require" : {
-		"n2n/n2n-reflection" : "~7.3.3",
-		"n2n/n2n-util" : "~7.3"
+		"n2n/n2n-reflection" : "~7.4",
+		"n2n/n2n-util" : "~7.4"
 	},
 	"autoload" : {
 		"psr-4" : {
