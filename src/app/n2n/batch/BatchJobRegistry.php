@@ -31,6 +31,7 @@ use n2n\core\Sync;
 use n2n\reflection\magic\MagicMethodInvoker;
 use n2n\config\source\impl\CacheStoreConfigSource;
 use n2n\util\io\IoUtils;
+use n2n\core\N2N;
 
 /**
  * Manages and or organizes the execution of all active batch jobs.
@@ -38,13 +39,13 @@ use n2n\util\io\IoUtils;
  */
 class BatchJobRegistry implements ThreadScoped {
 	private $batchJobLookupIds;
-	private $n2nContext;
+//	private $n2nContext;
 
 	const BATCH_FILE_NAME = 'datetime.ser';
 	
 	private function _init(GeneralConfig $generalConfig, N2nContext $n2nContext) {
 		$this->batchJobLookupIds = $generalConfig->getBatchJobLookupIds();
-		$this->n2nContext = $n2nContext;
+//		$this->n2nContext = $n2nContext;
 		
 	}
 	
@@ -63,16 +64,19 @@ class BatchJobRegistry implements ThreadScoped {
 		
 		$lock = Sync::exNb($this);
 		if ($lock === null) return;
-		
-		$triggerTracker = $this->createTriggerTracker();
+
+		$triggerTracker = $this->createTriggerTracker(N2N::getN2nContext());
 		
 		foreach ($this->batchJobLookupIds as $batchJobLookupId) {
+			$n2nContext = N2N::forkN2nContext();
 			try {
-				$this->triggerBatchJob($this->n2nContext->lookup($batchJobLookupId), $batchJobLookupId, 
-						$triggerTracker);
+				$this->triggerBatchJob($n2nContext->lookup($batchJobLookupId), $batchJobLookupId,
+						$triggerTracker, $n2nContext);
 			} catch (MagicObjectUnavailableException $e) {
 				$lock->release();
 				throw new BatchException('Invalid BatchJob registered: ' . $batchJobLookupId, 0, $e);
+			} finally {
+				$n2nContext->finalize();
 			}
 		}
 		
@@ -84,9 +88,9 @@ class BatchJobRegistry implements ThreadScoped {
 	/**
 	 * @return \n2n\batch\TriggerTracker
 	 */
-	private function createTriggerTracker() {
+	private function createTriggerTracker(N2nContext  $n2nContext) {
 		return new TriggerTracker(new CacheStoreConfigSource(
-				$this->n2nContext->getAppCache()->lookupCacheStore(TriggerTracker::class),
+				$n2nContext->getAppCache()->lookupCacheStore(TriggerTracker::class),
 				self::BATCH_FILE_NAME));
 	}
 	
@@ -95,9 +99,9 @@ class BatchJobRegistry implements ThreadScoped {
 	 * @param string $lookupId
 	 * @param TriggerTracker $triggerTracker
 	 */
-	private function triggerBatchJob($batchJob, string $lookupId, TriggerTracker $triggerTracker) {
+	private function triggerBatchJob($batchJob, string $lookupId, TriggerTracker $triggerTracker, N2nContext $n2nContext) {
 		$now = new \DateTime();
-		$magicMethodInvoker = new MagicMethodInvoker($this->n2nContext);
+		$magicMethodInvoker = new MagicMethodInvoker($n2nContext);
 		
 		$triggerInvestigator = new TriggerInvestigator($triggerTracker, $magicMethodInvoker, $batchJob, $lookupId, $now);
 		$triggerInvestigator->check(TriggerInvestigator::ON_TRIGGER_METHOD, null);
@@ -112,14 +116,14 @@ class BatchJobRegistry implements ThreadScoped {
 	/**
 	 * 
 	 */
-	private function triggerRequestListeners() {
-		foreach ($this->batchJobLookupIds as $batchControllerClass) {
-			if (!$batchControllerClass->implementsInterface('n2n\batch\RequestListener')) continue;
-				
-			$requestListener = $this->usableManager->lookupByClass($batchControllerClass);
-			$requestListener->onRequest();
-		}
-	}
+//	private function triggerRequestListeners() {
+//		foreach ($this->batchJobLookupIds as $batchControllerClass) {
+//			if (!$batchControllerClass->implementsInterface('n2n\batch\RequestListener')) continue;
+//
+//			$requestListener = $this->usableManager->lookupByClass($batchControllerClass);
+//			$requestListener->onRequest();
+//		}
+//	}
 	
 // 	private function readLastTriggeredTimestamps(FileResourceStream $fileStream) {
 // 		$lastTriggeredTimestamps = null;
@@ -205,144 +209,144 @@ class BatchJobRegistry implements ThreadScoped {
 		
 // // 		return false;
 // 	}
-	/**
-	 * 
-	 * @param \DateTime $now
-	 * @param int $lastTriggeredTimestamp
-	 */
-	private function checkDateTimeListeners(\DateTime $now, &$lastTriggeredTimestamp) {
-		$lastMod = null;
-		try {
-			$lastMod = DateUtils::createDateTime('@' . $lastTriggeredTimestamp);
-			$lastMod->setTimezone($now->getTimezone());
-		} catch (DateParseException $e) { }
-		
-		if (is_null($lastMod) || $lastMod->format('Y') != $now->format('Y')) {
-			$this->triggerNewHourListeners();
-			$this->triggerNewDayListeners();
-			$this->triggerNewMonthListeners();
-			$this->triggerNewYearListeners();
-			$lastTriggeredTimestamp = $now->getTimestamp();
-			return true;
-		} 
-		
-		if ($lastMod->format('m') != $now->format('m')) {
-			$this->triggerNewHourListeners();
-			$this->triggerNewDayListeners();
-			$this->triggerNewMonthListeners();
-			$lastTriggeredTimestamp = $now->getTimestamp();
-			return true;
-		} 
-		
-		if ($lastMod->format('d') != $now->format('d')) {
-			$this->triggerNewHourListeners();
-			$this->triggerNewDayListeners();
-			$lastTriggeredTimestamp = $now->getTimestamp();
-			return true;
-		} 
-		
-		if ($lastMod->format('H') != $now->format('H')) {
-			$this->triggerNewHourListeners();
-			$lastTriggeredTimestamp = $now->getTimestamp();
-			return true;
-		}
-		
-		return false;
-	}
-	/**
-	 * 
-	 */
-	private function triggerNewHourListeners() {
-		foreach ($this->batchJobLookupIds as $batchControllerClass) {
-			if (!$batchControllerClass->implementsInterface('n2n\batch\NewHourListener')) continue;
-			
-			$this->usableManager->lookupByClass($batchControllerClass)->onNewHour();
-		}
-	}
-	/**
-	 * 
-	 */
-	private function triggerNewDayListeners() {
-		foreach ($this->batchJobLookupIds as $batchControllerClass) {
-			if (!$batchControllerClass->implementsInterface('n2n\batch\NewDayListener')) continue;
-			
-			$this->usableManager->lookupByClass($batchControllerClass)->onNewDay();
-		}
-	}
-	/**
-	 * 
-	 */
-	private function triggerNewMonthListeners() {
-		foreach ($this->batchJobLookupIds as $batchControllerClass) {
-			if (!$batchControllerClass->implementsInterface('n2n\batch\NewMonthListener')) continue;
-			
-			$this->usableManager->lookupByClass($batchControllerClass)->onNewMonth();
-		}
-	}
-	/**
-	 * 
-	 */
-	private function triggerNewYearListeners() {
-		foreach ($this->batchJobLookupIds as $batchControllerClass) {
-			if (!$batchControllerClass->implementsInterface('n2n\batch\NewYearListener')) continue;
-			
-			$this->usableManager->lookupByClass($batchControllerClass)->onNewYear();
-		}
-	}
-	/**
-	 * 
-	 * @param string $path
-	 * @param string $pattern
-	 * @return bool
-	 */
-	public function check($path, $pattern) {
-		$now = new \DateTime();
-		
-		$mTime = null;
-		if (is_file($path)) {
-			$mTime = new \DateTime('@' . IoUtils::filemtime($path));
-			if ($now->format($pattern) <= $mTime->format($pattern)) {
-				return false;
-			}
-		}
-		
-		$fileStream = IoUtils::createSafeFileStream($path);
-		
-		if (isset($mTime)) {
-			$tsMTime = new \DateTime('@' . $fileStream->read());
-			if ($now->format($pattern) <= $tsMTime->format($pattern)) {
-				return false;
-			}
-		}
-		
-		$fileStream->truncate();
-		$fileStream->write($now->getTimestamp());
-		$fileStream->close();
-		
-		return true;
-	}
-	/**
-	 * 
-	 * @param \ReflectionClass $class
-	 * @return bool
-	 */
-	public function isDateTimeListenerClass(\ReflectionClass $class) {
-		foreach (self::getDateTimeListenerInterfaceNames() as $interfaceName) {
-			if ($class->implementsInterface($interfaceName)) return true;
-		}
-		
-		return false;
-	}
-	/**
-	 * 
-	 * @return array
-	 */
-	public static function getDateTimeListenerInterfaceNames() {
-		return array('n2n\batch\NewYearListener', 'n2n\batch\NewMonthListener', 
-				'n2n\batch\NewDayListener', 'n2n\batch\NewHourListener');
-	}
+//	/**
+//	 *
+//	 * @param \DateTime $now
+//	 * @param int $lastTriggeredTimestamp
+//	 */
+//	private function checkDateTimeListeners(\DateTime $now, &$lastTriggeredTimestamp) {
+//		$lastMod = null;
+//		try {
+//			$lastMod = DateUtils::createDateTime('@' . $lastTriggeredTimestamp);
+//			$lastMod->setTimezone($now->getTimezone());
+//		} catch (DateParseException $e) { }
+//
+//		if (is_null($lastMod) || $lastMod->format('Y') != $now->format('Y')) {
+//			$this->triggerNewHourListeners();
+//			$this->triggerNewDayListeners();
+//			$this->triggerNewMonthListeners();
+//			$this->triggerNewYearListeners();
+//			$lastTriggeredTimestamp = $now->getTimestamp();
+//			return true;
+//		}
+//
+//		if ($lastMod->format('m') != $now->format('m')) {
+//			$this->triggerNewHourListeners();
+//			$this->triggerNewDayListeners();
+//			$this->triggerNewMonthListeners();
+//			$lastTriggeredTimestamp = $now->getTimestamp();
+//			return true;
+//		}
+//
+//		if ($lastMod->format('d') != $now->format('d')) {
+//			$this->triggerNewHourListeners();
+//			$this->triggerNewDayListeners();
+//			$lastTriggeredTimestamp = $now->getTimestamp();
+//			return true;
+//		}
+//
+//		if ($lastMod->format('H') != $now->format('H')) {
+//			$this->triggerNewHourListeners();
+//			$lastTriggeredTimestamp = $now->getTimestamp();
+//			return true;
+//		}
+//
+//		return false;
+//	}
+//	/**
+//	 *
+//	 */
+//	private function triggerNewHourListeners() {
+//		foreach ($this->batchJobLookupIds as $batchControllerClass) {
+//			if (!$batchControllerClass->implementsInterface('n2n\batch\NewHourListener')) continue;
+//
+//			$this->usableManager->lookupByClass($batchControllerClass)->onNewHour();
+//		}
+//	}
+//	/**
+//	 *
+//	 */
+//	private function triggerNewDayListeners() {
+//		foreach ($this->batchJobLookupIds as $batchControllerClass) {
+//			if (!$batchControllerClass->implementsInterface('n2n\batch\NewDayListener')) continue;
+//
+//			$this->usableManager->lookupByClass($batchControllerClass)->onNewDay();
+//		}
+//	}
+//	/**
+//	 *
+//	 */
+//	private function triggerNewMonthListeners() {
+//		foreach ($this->batchJobLookupIds as $batchControllerClass) {
+//			if (!$batchControllerClass->implementsInterface('n2n\batch\NewMonthListener')) continue;
+//
+//			$this->usableManager->lookupByClass($batchControllerClass)->onNewMonth();
+//		}
+//	}
+//	/**
+//	 *
+//	 */
+//	private function triggerNewYearListeners() {
+//		foreach ($this->batchJobLookupIds as $batchControllerClass) {
+//			if (!$batchControllerClass->implementsInterface('n2n\batch\NewYearListener')) continue;
+//
+//			$this->usableManager->lookupByClass($batchControllerClass)->onNewYear();
+//		}
+//	}
+//	/**
+//	 *
+//	 * @param string $path
+//	 * @param string $pattern
+//	 * @return bool
+//	 */
+//	public function check($path, $pattern) {
+//		$now = new \DateTime();
+//
+//		$mTime = null;
+//		if (is_file($path)) {
+//			$mTime = new \DateTime('@' . IoUtils::filemtime($path));
+//			if ($now->format($pattern) <= $mTime->format($pattern)) {
+//				return false;
+//			}
+//		}
+//
+//		$fileStream = IoUtils::createSafeFileStream($path);
+//
+//		if (isset($mTime)) {
+//			$tsMTime = new \DateTime('@' . $fileStream->read());
+//			if ($now->format($pattern) <= $tsMTime->format($pattern)) {
+//				return false;
+//			}
+//		}
+//
+//		$fileStream->truncate();
+//		$fileStream->write($now->getTimestamp());
+//		$fileStream->close();
+//
+//		return true;
+//	}
+//	/**
+//	 *
+//	 * @param \ReflectionClass $class
+//	 * @return bool
+//	 */
+//	public function isDateTimeListenerClass(\ReflectionClass $class) {
+//		foreach (self::getDateTimeListenerInterfaceNames() as $interfaceName) {
+//			if ($class->implementsInterface($interfaceName)) return true;
+//		}
+//
+//		return false;
+//	}
+//	/**
+//	 *
+//	 * @return array
+//	 */
+//	public static function getDateTimeListenerInterfaceNames() {
+//		return array('n2n\batch\NewYearListener', 'n2n\batch\NewMonthListener',
+//				'n2n\batch\NewDayListener', 'n2n\batch\NewHourListener');
+//	}
 }
 
-class InvalidListenerClassException {
-	
-}
+//class InvalidListenerClassException {
+//
+//}
