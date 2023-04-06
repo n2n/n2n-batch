@@ -90,7 +90,7 @@ class BatchJobRegistry implements ThreadScoped {
 	 */
 	private function createTriggerTracker(N2nContext  $n2nContext) {
 		return new TriggerTracker(new CacheStoreConfigSource(
-				$n2nContext->getAppCache()->lookupCacheStore(TriggerTracker::class),
+				$n2nContext->getAppCache()->lookupCacheStore(TriggerTracker::class, true),
 				self::BATCH_FILE_NAME));
 	}
 	
