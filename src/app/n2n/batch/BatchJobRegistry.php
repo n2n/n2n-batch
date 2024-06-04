@@ -62,8 +62,8 @@ class BatchJobRegistry implements ThreadScoped {
 	public function trigger() {
 		if (empty($this->batchJobLookupIds)) return;
 		
-		$lock = Sync::exNb($this);
-		if ($lock === null) return;
+//		$lock = Sync::exNb($this);
+//		if ($lock === null) return;
 
 		$triggerTracker = $this->createTriggerTracker(N2N::getN2nContext());
 		
@@ -73,7 +73,7 @@ class BatchJobRegistry implements ThreadScoped {
 				$this->triggerBatchJob($n2nContext->lookup($batchJobLookupId), $batchJobLookupId,
 						$triggerTracker, $n2nContext);
 			} catch (MagicObjectUnavailableException $e) {
-				$lock->release();
+//				$lock->release();
 				throw new BatchException('Invalid BatchJob registered: ' . $batchJobLookupId, 0, $e);
 			} finally {
 				$n2nContext->finalize();
@@ -82,7 +82,7 @@ class BatchJobRegistry implements ThreadScoped {
 		
 		$triggerTracker->flush();
 		
-		$lock->release();
+//		$lock->release();
 	}
 	
 	/**
