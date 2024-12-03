@@ -52,7 +52,7 @@ class TriggerInvestigator {
 		$this->now = $now;
 	}
 	
-	public function check(string $methodName, string $dtCheckFormat = null) {
+	public function check(string $methodName, ?string $dtCheckFormat = null) {
 		if (!$this->class->hasMethod($methodName)) return;
 		
 		$lastTriggered = $this->triggerTracker->getLastTriggered($this->lookupId, $methodName);
