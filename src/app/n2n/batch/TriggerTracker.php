@@ -23,36 +23,33 @@ namespace n2n\batch;
 
 use n2n\config\source\WritableConfigSource;
 use n2n\util\DateUtils;
+use n2n\cache\CacheStore;
 
 class TriggerTracker {	
 	const LIMN_SEPARATOR = '::';
+
 	
-	private $configSource;
-	private $lastTriggeredTimestamps = array();
-	
-	public function __construct(WritableConfigSource $configSource) {
-		$this->configSource = $configSource;
-		$this->lastTriggeredTimestamps = $configSource->readArray();
+	public function __construct(private CacheStore $configSource) {
+
 	}
 	
-	private function buildKey(string $lookupId, string $methodName) {
+	private function buildKey(string $lookupId, string $methodName): string {
 		return $lookupId . self::LIMN_SEPARATOR . $methodName;
 	}
 	
-	public function getLastTriggered(string $lookupId, string $methodName) {
+	public function getLastTriggered(string $lookupId, string $methodName): ?\DateTime {
 		$key = $this->buildKey($lookupId, $methodName);
-		if (isset($this->lastTriggeredTimestamps[$key]) && is_numeric($this->lastTriggeredTimestamps[$key])) {
-			return DateUtils::createDateTimeFromTimestamp($this->lastTriggeredTimestamps[$key]);
+		$timestamp = $this->configSource->get($key, [])?->getData();
+
+		if (is_numeric($timestamp)) {
+			return DateUtils::createDateTimeFromTimestamp((int) $timestamp);
 		}
 		
 		return null;
 	}
 	
-	public function setLastTriggered(string $lookupId, string $methodName, \DateTime $lastTriggered) {
-		$this->lastTriggeredTimestamps[$this->buildKey($lookupId, $methodName)] = $lastTriggered->getTimestamp();
-	}
-	
-	public function flush() {
-		$this->configSource->writeArray($this->lastTriggeredTimestamps);
+	public function setLastTriggered(string $lookupId, string $methodName, \DateTime $lastTriggered): void {
+		$key = $this->buildKey($lookupId, $methodName);
+		$this->configSource->store($key, [], $lastTriggered->getTimestamp());
 	}
 }
