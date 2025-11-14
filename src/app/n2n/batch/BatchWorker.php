@@ -6,6 +6,7 @@ use n2n\util\type\ArgUtils;
 use n2n\util\magic\MagicObjectUnavailableException;
 use n2n\util\col\ArrayUtils;
 use n2n\core\container\N2nContext;
+use n2n\batch\ext\BatchTriggerResult;
 
 class BatchWorker {
 
@@ -34,22 +35,21 @@ class BatchWorker {
 		return $this->batchJobClassNames;
 	}
 
-	/**
-	 * @param string $batchJobClassName
-	 * @param \DateTimeImmutable $now
-	 * @param N2nContext $n2nContext
-	 */
-	function triggerBatchJob(string $batchJobClassName, \DateTimeImmutable $now, N2nContext $n2nContext): void {
+	function triggerBatchJob(string $batchJobClassName, \DateTimeImmutable $now, N2nContext $n2nContext): ?BatchTriggerResult {
 		$lastTriggeredDateTime = $this->triggerTracker->getLastTriggered($batchJobClassName);
 
 		try {
 			$batchJob = $n2nContext->lookup($batchJobClassName);
-			$triggerInvestigator = new TriggerInvestigator($batchJob, $now, $lastTriggeredDateTime, $n2nContext);
-			$triggerInvestigator->checkAll();
 		} catch (MagicObjectUnavailableException $e) {
 			throw new BatchException('Invalid BatchJob registered: ' . $batchJobClassName, 0, $e);
 		}
 
+		$triggerInvestigator = new TriggerInvestigator($batchJob, $now, $lastTriggeredDateTime, $n2nContext);
+		if (!$triggerInvestigator->checkAll()) {
+			return null;
+		}
+
 		$this->triggerTracker->setLastTriggered($batchJobClassName, $now);
+		return new BatchTriggerResult($batchJob, $n2nContext);
 	}
 }

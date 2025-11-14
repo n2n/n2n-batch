@@ -14,6 +14,8 @@ class BatchN2nExtension implements ConfigN2nExtension {
 	}
 
 	function applyToN2nContext(AppN2nContext $appN2nContext): void {
-		$appN2nContext->setBatch(new BatchContext($this->n2nApplication, $appN2nContext));
+		$context = new BatchAddOnContext($this->n2nApplication, $appN2nContext);
+		$appN2nContext->setBatch($context);
+		$appN2nContext->addAddonContext($context);
 	}
 }

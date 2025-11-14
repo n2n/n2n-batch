@@ -52,8 +52,7 @@ class TriggerInvestigator {
 		$called = $this->check(TriggerInvestigator::NEW_WEEK_METHOD, 'Y-m-W') || $called;
 		$called = $this->check(TriggerInvestigator::NEW_MONTH_METHOD, 'Y-m') || $called;
 		$called = $this->check(TriggerInvestigator::NEW_YEAR_METHOD, 'Y') || $called;
-		$called = $this->checkIntervals() || $called;
-		return $called;
+		return $this->checkIntervals() || $called;
 	}
 	
 	private function check(string $methodName, ?string $dtCheckFormat = null): bool {
@@ -63,6 +62,7 @@ class TriggerInvestigator {
 
 		if ($this->lastTriggeredDateTime === null || $dtCheckFormat === null
 				|| $this->lastTriggeredDateTime->format($dtCheckFormat) != $this->now->format($dtCheckFormat)) {
+
 			$method = ExUtils::try(fn () => $this->class->getMethod($methodName));
 			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, $this->lastTriggeredDateTime);
 			$this->magicMethodInvoker->setMethod($method);

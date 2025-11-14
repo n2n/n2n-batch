@@ -21,27 +21,29 @@
  */
 namespace n2n\batch;
 
-use n2n\core\config\GeneralConfig;
 use n2n\core\container\N2nContext;
 use n2n\context\ThreadScoped;
-use n2n\context\attribute\Inject;
+use n2n\util\type\ArgUtils;
 
 /**
  * Manages and or organizes the execution of all active batch jobs.
  *
  */
 class BatchJobRegistry implements ThreadScoped {
-	private array $batchJobClassNames;
-
-	#[Inject]
-	private N2nContext $n2nContext;
 	
-	private function _init(GeneralConfig $generalConfig) {
-		$this->batchJobClassNames = $generalConfig->getBatchJobClassNames();
+	function __construct(private N2nContext $n2nContext, private array $batchJobClassNames = []) {
+		ArgUtils::valArray($this->batchJobClassNames, 'string');
 	}
 
 	public function registerBatchJobLookupClassName(string $className): void {
 		$this->batchJobClassNames[] = $className;
+	}
+
+	/**
+	 * @return string[];
+	 */
+	function getBatchJobClassNames(): array {
+		return $this->batchJobClassNames;
 	}
 
 	/**
@@ -58,8 +60,6 @@ class BatchJobRegistry implements ThreadScoped {
 	private function createTriggerTracker(): TriggerTracker {
 		return new TriggerTracker($this->n2nContext->getAppCache()->lookupCacheStore(TriggerTracker::class, true));
 	}
-	
-
 	
 	/**
 	 * 

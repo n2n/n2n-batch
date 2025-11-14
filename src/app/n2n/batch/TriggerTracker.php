@@ -37,12 +37,12 @@ class TriggerTracker {
 		return $batchJobClassName;
 	}
 	
-	public function getLastTriggered(string $batchJobClassName): ?\DateTime {
+	public function getLastTriggered(string $batchJobClassName): ?\DateTimeImmutable {
 		$key = $this->buildKey($batchJobClassName);
 		$timestamp = $this->configSource->get($key, new CharacteristicsList([]))?->getData();
 
 		if (is_numeric($timestamp)) {
-			return DateUtils::createDateTimeFromTimestamp((int) $timestamp);
+			return DateUtils::createDateTimeImmutableFromTimestamp((int) $timestamp);
 		}
 		
 		return null;
