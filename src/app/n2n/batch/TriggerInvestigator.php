@@ -21,9 +21,10 @@
  */
 namespace n2n\batch;
 
-use n2n\reflection\magic\MagicMethodInvoker;
 use n2n\reflection\ReflectionContext;
 use n2n\util\type\CastUtils;
+use n2n\util\magic\impl\MagicMethodInvoker;
+use n2n\util\ex\ExUtils;
 
 class TriggerInvestigator {
 	const ON_TRIGGER_METHOD = '_onTrigger';
@@ -32,64 +33,66 @@ class TriggerInvestigator {
 	const NEW_WEEK_METHOD = '_onNewWeek';
 	const NEW_MONTH_METHOD = '_onNewMonth';
 	const NEW_YEAR_METHOD = '_onNewYear';
-	
+
 	const LAST_TRIGGERED_ARG = 'lastTriggered';
+
+	private \ReflectionClass $class;
+	private MagicMethodInvoker $magicMethodInvoker;
 	
-	private $triggerTracker;
-	private $magicMethodInvoker;
-	private $batchJob;
-	private $class;
-	private $lookupId;
-	private $now;
-	
-	public function __construct(TriggerTracker $triggerTracker, MagicMethodInvoker $magicMethodInvoker, $batchJob,
-			string $lookupId, \DateTime $now) {
-		$this->triggerTracker = $triggerTracker;
-		$this->magicMethodInvoker = $magicMethodInvoker;
-		$this->batchJob = $batchJob;
-		$this->class = new \ReflectionClass($batchJob);
-		$this->lookupId = $lookupId;
-		$this->now = $now;
+	public function __construct(private object $batchJob, private \DateTimeImmutable $now,
+			private ?\DateTimeImmutable $lastTriggeredDateTime, private $n2nContext) {
+		$this->class = new \ReflectionClass($this->batchJob);
+		$this->magicMethodInvoker = new MagicMethodInvoker($n2nContext);
+	}
+
+	function checkAll(): bool {
+		$called = $this->check(TriggerInvestigator::ON_TRIGGER_METHOD, null);
+		$called = $this->check(TriggerInvestigator::NEW_HOUR_METHOD, 'Y-m-d H') || $called;
+		$called = $this->check(TriggerInvestigator::NEW_DAY_METHOD, 'Y-m-d') || $called;
+		$called = $this->check(TriggerInvestigator::NEW_WEEK_METHOD, 'Y-m-W') || $called;
+		$called = $this->check(TriggerInvestigator::NEW_MONTH_METHOD, 'Y-m') || $called;
+		$called = $this->check(TriggerInvestigator::NEW_YEAR_METHOD, 'Y') || $called;
+		$called = $this->checkIntervals() || $called;
+		return $called;
 	}
 	
-	public function check(string $methodName, ?string $dtCheckFormat = null) {
-		if (!$this->class->hasMethod($methodName)) return;
-		
-		$lastTriggered = $this->triggerTracker->getLastTriggered($this->lookupId, $methodName);
-		
-		if ($lastTriggered === null || $dtCheckFormat === null
-				|| $lastTriggered->format($dtCheckFormat) != $this->now->format($dtCheckFormat)) {
-			$method = $this->class->getMethod($methodName);
-			$method->setAccessible(true);
-			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, $lastTriggered);
+	private function check(string $methodName, ?string $dtCheckFormat = null): bool {
+		if (!$this->class->hasMethod($methodName)) {
+			return false;
+		}
+
+		if ($this->lastTriggeredDateTime === null || $dtCheckFormat === null
+				|| $this->lastTriggeredDateTime->format($dtCheckFormat) != $this->now->format($dtCheckFormat)) {
+			$method = ExUtils::try(fn () => $this->class->getMethod($methodName));
+			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, $this->lastTriggeredDateTime);
 			$this->magicMethodInvoker->setMethod($method);
 			$this->magicMethodInvoker->invoke($this->batchJob);
-			
-			$this->triggerTracker->setLastTriggered($this->lookupId, $methodName, $this->now);
+			return true;
 		}
+
+		return false;
 	}
 	
-	public function checkIntervals() {
+	private function checkIntervals() {
 		$as = ReflectionContext::getAnnotationSet($this->class);
 		
 		foreach ($as->getMethodAnnotationsByName(AnnoBatch::class) as $annoBatch) {
 			CastUtils::assertTrue($annoBatch instanceof AnnoBatch);
 			
 			$method = $annoBatch->getAnnotatedMethod();
-			$lastTriggered = $this->triggerTracker->getLastTriggered($this->lookupId, $method->getName());
-			
-			if ($lastTriggered !== null) {
-				$nextDt = clone $lastTriggered;
-				$nextDt->add($annoBatch->getInterval());
-				if ($nextDt > $this->now) continue;
+
+			if ($this->lastTriggeredDateTime !== null) {
+
+				$nextDt = $this->lastTriggeredDateTime->add($annoBatch->getInterval());
+				if ($nextDt > $this->now) {
+					continue;
+				}
 			}
 			
 			$method->setAccessible(true);
-			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, $lastTriggered);
+			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, $this->lastTriggeredDateTime);
 			$this->magicMethodInvoker->setMethod($method);
 			$this->magicMethodInvoker->invoke($this->batchJob);
-			
-			$this->triggerTracker->setLastTriggered($this->lookupId, $method->getName(), $this->now);
 		}
 	}
 }

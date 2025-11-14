@@ -21,97 +21,45 @@
  */
 namespace n2n\batch;
 
-use n2n\util\DateUtils;
-use n2n\util\DateParseException;
 use n2n\core\config\GeneralConfig;
 use n2n\core\container\N2nContext;
 use n2n\context\ThreadScoped;
-use n2n\util\magic\MagicObjectUnavailableException;
-use n2n\core\Sync;
-use n2n\reflection\magic\MagicMethodInvoker;
-use n2n\config\source\impl\CacheStoreConfigSource;
-use n2n\util\io\IoUtils;
-use n2n\core\N2N;
+use n2n\context\attribute\Inject;
 
 /**
  * Manages and or organizes the execution of all active batch jobs.
  *
  */
 class BatchJobRegistry implements ThreadScoped {
-	private $batchJobLookupIds;
-//	private $n2nContext;
+	private array $batchJobClassNames;
 
-	const BATCH_FILE_NAME = 'datetime.ser';
+	#[Inject]
+	private N2nContext $n2nContext;
 	
-	private function _init(GeneralConfig $generalConfig, N2nContext $n2nContext) {
-		$this->batchJobLookupIds = $generalConfig->getBatchJobLookupIds();
-//		$this->n2nContext = $n2nContext;
-		
+	private function _init(GeneralConfig $generalConfig) {
+		$this->batchJobClassNames = $generalConfig->getBatchJobClassNames();
 	}
-	
-	/**
-	 * @param \ReflectionClass $class
-	 */
-	public function registerBatchJobLookupId(string $lookupId) {
-		$this->batchJobLookupIds[] = $lookupId;
-	}
-	
-	/**
-	 * 
-	 */
-	public function trigger() {
-		if (empty($this->batchJobLookupIds)) return;
-		
-//		$lock = Sync::exNb($this);
-//		if ($lock === null) return;
 
-		$triggerTracker = $this->createTriggerTracker(N2N::getN2nContext());
-		
-		foreach ($this->batchJobLookupIds as $batchJobLookupId) {
-			$n2nContext = N2N::forkN2nContext();
-			try {
-				$this->triggerBatchJob($n2nContext->lookup($batchJobLookupId), $batchJobLookupId,
-						$triggerTracker, $n2nContext);
-			} catch (MagicObjectUnavailableException $e) {
-//				$lock->release();
-				throw new BatchException('Invalid BatchJob registered: ' . $batchJobLookupId, 0, $e);
-			} finally {
-				$n2nContext->finalize();
-			}
-		}
-		
-		$triggerTracker->flush();
-		
-//		$lock->release();
+	public function registerBatchJobLookupClassName(string $className): void {
+		$this->batchJobClassNames[] = $className;
+	}
+
+	/**
+	 * @deprecated use {@link self::registerBatchJobLookupClassName()}
+	 */
+	public function registerBatchJobLookupId(string $lookupId): void {
+		$this->registerBatchJobLookupClassName($lookupId);
+	}
+
+	function createBatchWorker(): BatchWorker {
+		return new BatchWorker($this->batchJobClassNames, $this->createTriggerTracker());
+	}
+
+	private function createTriggerTracker(): TriggerTracker {
+		return new TriggerTracker($this->n2nContext->getAppCache()->lookupCacheStore(TriggerTracker::class, true));
 	}
 	
-	/**
-	 * @return \n2n\batch\TriggerTracker
-	 */
-	private function createTriggerTracker(N2nContext  $n2nContext) {
-		return new TriggerTracker(new CacheStoreConfigSource(
-				$n2nContext->getAppCache()->lookupCacheStore(TriggerTracker::class, true),
-				self::BATCH_FILE_NAME));
-	}
-	
-	/**
-	 * @param object $batchJob
-	 * @param string $lookupId
-	 * @param TriggerTracker $triggerTracker
-	 */
-	private function triggerBatchJob($batchJob, string $lookupId, TriggerTracker $triggerTracker, N2nContext $n2nContext) {
-		$now = new \DateTime();
-		$magicMethodInvoker = new MagicMethodInvoker($n2nContext);
-		
-		$triggerInvestigator = new TriggerInvestigator($triggerTracker, $magicMethodInvoker, $batchJob, $lookupId, $now);
-		$triggerInvestigator->check(TriggerInvestigator::ON_TRIGGER_METHOD, null);
-		$triggerInvestigator->check(TriggerInvestigator::NEW_HOUR_METHOD, 'Y-m-d H');
-		$triggerInvestigator->check(TriggerInvestigator::NEW_DAY_METHOD, 'Y-m-d');
-		$triggerInvestigator->check(TriggerInvestigator::NEW_WEEK_METHOD, 'Y-m-W');
-		$triggerInvestigator->check(TriggerInvestigator::NEW_MONTH_METHOD, 'Y-m');
-		$triggerInvestigator->check(TriggerInvestigator::NEW_YEAR_METHOD, 'Y');
-		$triggerInvestigator->checkIntervals();
-	}
+
 	
 	/**
 	 * 
