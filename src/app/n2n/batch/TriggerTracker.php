@@ -21,9 +21,9 @@
  */
 namespace n2n\batch;
 
-use n2n\config\source\WritableConfigSource;
 use n2n\util\DateUtils;
 use n2n\cache\CacheStore;
+use n2n\cache\CharacteristicsList;
 
 class TriggerTracker {	
 	const LIMN_SEPARATOR = '::';
@@ -33,23 +33,23 @@ class TriggerTracker {
 
 	}
 	
-	private function buildKey(string $lookupId, string $methodName): string {
-		return $lookupId . self::LIMN_SEPARATOR . $methodName;
+	private function buildKey(string $batchJobClassName): string {
+		return $batchJobClassName;
 	}
 	
-	public function getLastTriggered(string $lookupId, string $methodName): ?\DateTime {
-		$key = $this->buildKey($lookupId, $methodName);
-		$timestamp = $this->configSource->get($key, [])?->getData();
+	public function getLastTriggered(string $batchJobClassName): ?\DateTimeImmutable {
+		$key = $this->buildKey($batchJobClassName);
+		$timestamp = $this->configSource->get($key, new CharacteristicsList([]))?->getData();
 
 		if (is_numeric($timestamp)) {
-			return DateUtils::createDateTimeFromTimestamp((int) $timestamp);
+			return DateUtils::createDateTimeImmutableFromTimestamp((int) $timestamp);
 		}
 		
 		return null;
 	}
 	
-	public function setLastTriggered(string $lookupId, string $methodName, \DateTime $lastTriggered): void {
-		$key = $this->buildKey($lookupId, $methodName);
-		$this->configSource->store($key, [], $lastTriggered->getTimestamp());
+	public function setLastTriggered(string $batchJobClassName, \DateTimeImmutable $lastTriggered): void {
+		$key = $this->buildKey($batchJobClassName);
+		$this->configSource->store($key, new CharacteristicsList([]), $lastTriggered->getTimestamp());
 	}
 }
