@@ -1,6 +1,6 @@
 {
 	"name" : "n2n/n2n-batch",
-	"type" : "library",
+    "type" : "n2n-module",
 	"description" : "batch job support for n2n framework",
 	"keywords" : [
 		"n2n",
@@ -24,6 +24,7 @@
 		}
 	},
 	"require" : {
+        "n2n/n2n-composer-module-installer" : "^7.1.6",
 		"n2n/n2n-reflection" : "~7.5.0",
 		"n2n/n2n-util" : "~7.5.0",
         "n2n/n2n": "~7.5.0"
