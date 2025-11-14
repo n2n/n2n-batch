@@ -34,7 +34,7 @@ class BatchAddOnContext implements N2nBatch, AddOnContext {
 
 		$results = [];
 		foreach ($batchJobClassNames as $batchJobClassName) {
-			$forkedN2nContext = $this->n2nApplication->forkN2nContext($this->n2nContext, true);
+			$forkedN2nContext = $config->n2nContext ?? $this->n2nApplication->forkN2nContext($this->n2nContext, true);
 			$results[] = $batchWorker->triggerBatchJob($batchJobClassName, $config?->dateTime ?? new \DateTimeImmutable(),
 						$forkedN2nContext);
 		}
