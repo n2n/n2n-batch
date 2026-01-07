@@ -16,7 +16,8 @@ require __DIR__ . '/../vendor/autoload.php';
 // 		require __DIR__ . '/../vendor/composer/autoload_psr4.php',
 // 		require __DIR__ . '/../vendor/composer/autoload_classmap.php');
 
-n2n\core\N2N::initialize('', $varPath, new n2n\core\FileN2nCache());
+n2n\core\N2N::initialize('', $varPath, n2nCache: \n2n\core\cache\impl\N2nCaches::ephemeral(),
+		enableExceptionHandler: false);
 
 // function test($value) {
 // 	var_dump($value);

@@ -38,7 +38,7 @@ class TriggerInvestigator {
 
 	private \ReflectionClass $class;
 	private MagicMethodInvoker $magicMethodInvoker;
-	
+
 	public function __construct(private object $batchJob, private \DateTimeImmutable $now,
 			private ?\DateTimeImmutable $lastTriggeredDateTime, private $n2nContext) {
 		$this->class = new \ReflectionClass($this->batchJob);
@@ -54,7 +54,7 @@ class TriggerInvestigator {
 		$called = $this->check(TriggerInvestigator::NEW_YEAR_METHOD, 'Y') || $called;
 		return $this->checkIntervals() || $called;
 	}
-	
+
 	private function check(string $methodName, ?string $dtCheckFormat = null): bool {
 		if (!$this->class->hasMethod($methodName)) {
 			return false;
@@ -64,7 +64,7 @@ class TriggerInvestigator {
 				|| $this->lastTriggeredDateTime->format($dtCheckFormat) != $this->now->format($dtCheckFormat)) {
 
 			$method = ExUtils::try(fn () => $this->class->getMethod($methodName));
-			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, $this->lastTriggeredDateTime);
+			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, \DateTime::createFromImmutable($this->lastTriggeredDateTime));
 			$this->magicMethodInvoker->setMethod($method);
 			$this->magicMethodInvoker->invoke($this->batchJob);
 			return true;
@@ -72,13 +72,13 @@ class TriggerInvestigator {
 
 		return false;
 	}
-	
+
 	private function checkIntervals() {
 		$as = ReflectionContext::getAnnotationSet($this->class);
-		
+
 		foreach ($as->getMethodAnnotationsByName(AnnoBatch::class) as $annoBatch) {
 			CastUtils::assertTrue($annoBatch instanceof AnnoBatch);
-			
+
 			$method = $annoBatch->getAnnotatedMethod();
 
 			if ($this->lastTriggeredDateTime !== null) {
@@ -88,9 +88,9 @@ class TriggerInvestigator {
 					continue;
 				}
 			}
-			
+
 			$method->setAccessible(true);
-			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, $this->lastTriggeredDateTime);
+			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, \DateTime::createFromImmutable($this->lastTriggeredDateTime));
 			$this->magicMethodInvoker->setMethod($method);
 			$this->magicMethodInvoker->invoke($this->batchJob);
 		}
