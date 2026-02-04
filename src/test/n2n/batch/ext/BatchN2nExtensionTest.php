@@ -7,6 +7,7 @@ use n2n\batch\BatchJobRegistry;
 use n2n\batch\mock\BatchJobMock;
 use n2n\core\ext\BatchTriggerConfig;
 use n2n\util\DateUtils;
+use n2n\batch\mock\UnregisteredBatchJobMock;
 
 class BatchN2nExtensionTest extends TestCase {
 
@@ -39,6 +40,15 @@ class BatchN2nExtensionTest extends TestCase {
 		$this->assertSame(
 				['_onTrigger'],
 				$results[0]->batchJob->calledMethodNames);
+	}
+
+	function testEnsureBatchJobClassNameExists() {
+		$this->expectException(\InvalidArgumentException::class);
+		$this->expectExceptionMessage('Unknown batch job: n2n\batch\mock\UnregisteredBatchJobMock');
+
+		TestEnv::getN2nContext()->getBatch()
+				->trigger(new BatchTriggerConfig(filterBatchJobNames: [UnregisteredBatchJobMock::class]));
+
 	}
 
 	/**
