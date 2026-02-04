@@ -36,6 +36,8 @@ class BatchWorker {
 	}
 
 	function triggerBatchJob(string $batchJobClassName, \DateTimeImmutable $now, N2nContext $n2nContext): ?BatchTriggerResult {
+		$this->ensureBatchJobClassNameExists($batchJobClassName);
+
 		$lastTriggeredDateTime = $this->triggerTracker->getLastTriggered($batchJobClassName);
 
 		try {
