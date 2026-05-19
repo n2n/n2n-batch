@@ -3,9 +3,15 @@
 namespace n2n\batch\mock;
 
 use n2n\context\attribute\ThreadScoped;
+use n2n\batch\attribute\Batch;
+use n2n\reflection\annotation\AnnoInit;
+use n2n\batch\AnnoBatch;
 
 #[ThreadScoped]
 class BatchJobMock {
+	private static function _annos(AnnoInit $ai): void {
+		$ai->m('legacyInterval5m', new AnnoBatch(new \DateInterval('PT5M')));
+	}
 
 	public array $calledMethodNames = [];
 
@@ -31,5 +37,14 @@ class BatchJobMock {
 
 	function _onNewYear(): void {
 		$this->calledMethodNames[] = '_onNewYear';
+	}
+
+	#[Batch(new \DateInterval('PT5M'))]
+	function interval5m(): void {
+		$this->calledMethodNames[] = 'interval5m';
+	}
+
+	function legacyInterval5m(): void {
+		$this->calledMethodNames[] = 'legacyInterval5m';
 	}
 }
