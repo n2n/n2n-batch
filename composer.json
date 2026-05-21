@@ -27,7 +27,8 @@
         "n2n/n2n-composer-module-installer" : "^7.1.6",
 		"n2n/n2n-reflection" : "~7.5.0",
 		"n2n/n2n-util" : "~7.5.0",
-        "n2n/n2n": "~7.5.0"
+        "n2n/n2n": "~7.5.0",
+        "n2n/n2n-queue": "~7.5.0"
 	},
 	"autoload" : {
 		"psr-4" : {

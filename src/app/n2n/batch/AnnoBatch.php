@@ -25,10 +25,10 @@ use n2n\reflection\annotation\MethodAnnotation;
 use n2n\reflection\annotation\MethodAnnotationTrait;
 use n2n\reflection\annotation\AnnotationTrait;
 use n2n\reflection\attribute\legacy\LegacyAnnotation;
-use n2n\batch\attribute\Batch;
+use n2n\batch\attribute\BatchInterval;
 
 /**
- * @deprecated use {@link Batch}
+ * @deprecated use {@link BatchInterval}
  */
 class AnnoBatch implements MethodAnnotation, LegacyAnnotation {
 	use MethodAnnotationTrait, AnnotationTrait;
@@ -44,10 +44,10 @@ class AnnoBatch implements MethodAnnotation, LegacyAnnotation {
 	}
 
 	public function getAttributeName(): string {
-		return Batch::class;
+		return BatchInterval::class;
 	}
 
-	public function toAttributeInstance(): Batch {
-		return new Batch($this->interval);
+	public function toAttributeInstance(): BatchInterval {
+		return new BatchInterval($this->interval);
 	}
 }

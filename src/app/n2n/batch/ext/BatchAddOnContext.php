@@ -32,6 +32,10 @@ class BatchAddOnContext implements N2nBatch, AddOnContext {
 			}
 		}
 
+		foreach ($config->inputs as $input) {
+			$batchWorker->pushInput($input);
+		}
+
 		$results = [];
 		foreach ($batchJobClassNames as $batchJobClassName) {
 			$forkedN2nContext = $config->n2nContext ?? $this->n2nApplication->forkN2nContext($this->n2nContext, true);

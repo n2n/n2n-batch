@@ -25,7 +25,13 @@ use n2n\reflection\ReflectionContext;
 use n2n\util\type\CastUtils;
 use n2n\util\magic\impl\MagicMethodInvoker;
 use n2n\util\ex\ExUtils;
-use n2n\batch\attribute\Batch;
+use n2n\batch\attribute\BatchInterval;
+use n2n\queue\QueueStorePool;
+use n2n\batch\attribute\BatchInput;
+use n2n\reflection\attribute\MethodAttribute;
+use n2n\core\container\N2nContext;
+use n2n\queue\PolledItemRef;
+use Throwable;
 
 class TriggerInvestigator {
 	const ON_TRIGGER_METHOD = '_onTrigger';
@@ -39,9 +45,10 @@ class TriggerInvestigator {
 
 	private \ReflectionClass $class;
 	private MagicMethodInvoker $magicMethodInvoker;
+	private ?QueueStorePool $queueStorePool;
 	
 	public function __construct(private object $batchJob, private \DateTimeImmutable $now,
-			private ?\DateTimeImmutable $lastTriggeredDateTime, private $n2nContext) {
+			private ?\DateTimeImmutable $lastTriggeredDateTime, private N2nContext $n2nContext) {
 		$this->class = new \ReflectionClass($this->batchJob);
 		$this->magicMethodInvoker = new MagicMethodInvoker($n2nContext);
 	}
@@ -53,7 +60,8 @@ class TriggerInvestigator {
 		$called = $this->check(TriggerInvestigator::NEW_WEEK_METHOD, 'Y-m-W') || $called;
 		$called = $this->check(TriggerInvestigator::NEW_MONTH_METHOD, 'Y-m') || $called;
 		$called = $this->check(TriggerInvestigator::NEW_YEAR_METHOD, 'Y') || $called;
-		return $this->checkIntervals() || $called;
+		$called = $this->checkIntervals() || $called;
+		return $this->checkInputs() || $called;
 	}
 	
 	private function check(string $methodName, ?string $dtCheckFormat = null): bool {
@@ -74,13 +82,14 @@ class TriggerInvestigator {
 		return false;
 	}
 	
-	private function checkIntervals() {
+	private function checkIntervals(): bool {
+		$called = false;
+
 		$as = ReflectionContext::getAttributeSet($this->class);
-		
-		foreach ($as->getMethodAttributesByName(Batch::class) as $batchAttribute) {
+		foreach ($as->getMethodAttributesByName(BatchInterval::class) as $batchAttribute) {
 			$method = $batchAttribute->getMethod();
 			$batch = $batchAttribute->getInstance();
-			assert($batch instanceof Batch);
+			assert($batch instanceof BatchInterval);
 
 			if ($this->lastTriggeredDateTime !== null) {
 				$nextDt = $this->lastTriggeredDateTime->add($batch->interval);
@@ -93,6 +102,62 @@ class TriggerInvestigator {
 			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, $this->lastTriggeredDateTime);
 			$this->magicMethodInvoker->setMethod($method);
 			$this->magicMethodInvoker->invoke($this->batchJob);
+			$called = true;
+		}
+
+		return $called;
+	}
+
+	private function checkInputs(): bool {
+		if ($this->queueStorePool === null) {
+			return false;
+		}
+
+		$called = false;
+		foreach ((new BatchJobClassAnalyzer($this->class))->findBatchInputAttributes() as $attribute) {
+			$batchInput = $attribute->getInstance();
+
+			$queueStore = $this->queueStorePool->lookupQueueStore($batchInput->className);
+			while (null !== ($ref = $queueStore->poll())) {
+				$this->handleInputAttribute($attribute, $ref);
+				$called = true;
+			}
+		}
+
+		return $called;
+	}
+
+	function isInputObjSupported(object $inputObj): bool {
+		$inputClassName = get_class($inputObj);
+		return null !== (new BatchJobClassAnalyzer($this->class))->findBatchInputAttribute($inputClassName);
+	}
+
+	function checkForInputObj(object $inputObj): bool {
+		$inputClassName = get_class($inputObj);
+		$attribute = (new BatchJobClassAnalyzer($this->class))->findBatchInputAttribute($inputClassName);
+		if ($attribute === null) {
+			return false;
+		}
+
+		$queueStore = $this->queueStorePool->lookupQueueStore($inputClassName);
+		$queueStore->addAndPoll($inputObj);
+
+		$this->handleInputAttribute($attribute, $inputObj);
+		return true;
+	}
+
+
+	private function handleInputAttribute(MethodAttribute $attribute, PolledItemRef $polledItemRef): void {
+		$invoker = new MagicMethodInvoker($this->n2nContext);
+		$invoker->setMethod($attribute->getMethod());
+
+		try {
+			$invoker->invoke($this->batchJob, firstArgs: [$polledItemRef->data]);
+			$polledItemRef->ack();
+		} catch (Throwable $e) {
+			$polledItemRef->reject(true);
+			throw new BatchException('BatchJob was aborted');
 		}
 	}
+
 }

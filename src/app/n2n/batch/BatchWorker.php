@@ -54,4 +54,25 @@ class BatchWorker {
 		$this->triggerTracker->setLastTriggered($batchJobClassName, $now);
 		return new BatchTriggerResult($batchJob, $n2nContext);
 	}
+
+	function triggerByInput(string $inputClassName): bool {
+		foreach ($this->batchJobClassNames as $batchJobClassName) {
+			try {
+				$attribute = (new BatchJobClassAnalyzer(new \ReflectionClass($batchJobClassName)))
+						->findBatchInputAttribute($inputClassName);
+			} catch (\ReflectionException $e) {
+				throw new BatchException('Invalid BatchJob registered: ' . $batchJobClassName, 0, $e);
+			}
+
+			if ($attribute === null) {
+				continue;
+			}
+
+
+		}
+
+		$this->ensureBatchJobClassNameExists($inputClassName);
+
+
+	}
 }
