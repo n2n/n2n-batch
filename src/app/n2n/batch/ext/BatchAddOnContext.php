@@ -49,11 +49,9 @@ class BatchAddOnContext implements N2nBatch, AddOnContext {
 		$registry = $this->n2nContext->lookup(BatchClassRegistry::class);
 		$messageDispatcher = $registry->createMessageDispatcher();
 
-		$this->n2nContext->getTransactionManager()->registerResource($messageDispatcher);
+		$messageDispatcher->bindToTransactionManager($this->n2nContext->getTransactionManager());
 
-		$forkedN2nContext = $config->n2nContext ?? $this->n2nApplication
-				->forkN2nContext($this->n2nContext, true);
-		$messageDispatcher->dispatchMessage($message, $forkedN2nContext);
+		$messageDispatcher->dispatchMessage($message, $this->n2nContext);
 	}
 
 	function finalize(): void {

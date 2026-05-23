@@ -7,15 +7,17 @@ use n2n\core\container\Transaction;
 use n2n\core\container\N2nContext;
 use n2n\batch\BatchJobClassAnalyzer;
 use n2n\reflection\attribute\MethodAttribute;
-use n2n\batch\attribute\MessageHandler;
+use n2n\batch\attribute\BatchMessageClass;
 use n2n\queue\PolledItemRef;
 use n2n\batch\BatchException;
 use n2n\util\ex\IllegalStateException;
 use n2n\core\container\CommitListener;
 use n2n\core\container\err\TransactionPhaseException;
 use n2n\batch\LazyBatchObj;
+use n2n\core\container\TransactionManager;
 
 class MessageDispatcher implements TransactionalResource, CommitListener {
+	private ?TransactionManager $tm = null;
 	private bool $inTransaction = false;
 	/**
 	 * @var PendingMessageDispatch[]
@@ -41,7 +43,7 @@ class MessageDispatcher implements TransactionalResource, CommitListener {
 			}
 
 			$this->pendingMessageDispatches[] = new PendingMessageDispatch($lazyBatchObj,
-					$messageHandlerAttribute, $message, $n2nContext);
+					$messageHandlerAttribute, $message);
 			return;
 		}
 
@@ -71,9 +73,6 @@ class MessageDispatcher implements TransactionalResource, CommitListener {
 
 	public function commit(Transaction $transaction): void {
 		$this->inTransaction = false;
-		foreach ($this->pendingMessageDispatches as $pendingMessageDispatch) {
-			$pendingMessageDispatch->polledItemRef->reject(true);
-		}
 	}
 
 	public function rollBack(Transaction $transaction): void {
@@ -84,8 +83,14 @@ class MessageDispatcher implements TransactionalResource, CommitListener {
 		$this->pendingMessageDispatches = [];
 	}
 
-	private function handleMessages(): void {
+	public function bindToTransactionManager(TransactionManager $tm): void {
+		IllegalStateException::assertTrue($this->tm === null);
+		$this->tm = $tm;
+		$tm->registerResource($this);
+		$tm->registerCommitListener($this);
+	}
 
+	private function handleMessages(): void {
 
 	}
 
@@ -108,15 +113,22 @@ class MessageDispatcher implements TransactionalResource, CommitListener {
 	}
 
 	public function postClose(Transaction $transaction): void {
-		foreach ($this->pendingMessageDispatches as $pendingMessageDispatch) {
-			$invoker = new MessageHandlerInvoker($pendingMessageDispatch->n2nContext);
-			$invoker->invoke($pendingMessageDispatch->lazyBatchObj->getObject(),
-					$pendingMessageDispatch->methodAttribute->getMethod(),
+		$this->tm->unregisterResource($this);
+		$this->tm->unregisterCommitListener($this);
+
+		$pendingMessageDispatches = $this->pendingMessageDispatches;
+
+		$this->pendingMessageDispatches = [];
+		foreach ($pendingMessageDispatches as $pendingMessageDispatch) {
+			$invoker = new MessageHandlerInvoker($pendingMessageDispatch->lazyBatchObj);
+			$invoker->invoke(
+					$pendingMessageDispatch->methodAttribute,
 					$pendingMessageDispatch->polledItemRef);
 		}
 	}
 
 	public function postCorruptedState(?Transaction $transaction, TransactionPhaseException $e): void {
+		$this->pendingMessageDispatches = [];
 	}
 }
 
@@ -124,7 +136,7 @@ class PendingMessageDispatch {
 
 	function __construct(public readonly LazyBatchObj $lazyBatchObj,
 			public readonly MethodAttribute $methodAttribute,
-			public readonly object $message, public readonly N2nContext $n2nContext) {
+			public readonly object $message) {
 
 	}
 
@@ -138,7 +150,7 @@ class PendingMessageDispatch {
 	public string $messageClassName {
 		get {
 			$messageHandler = $this->methodAttribute->getInstance();
-			assert($messageHandler instanceof MessageHandler);
+			assert($messageHandler instanceof BatchMessageClass);
 			return $messageHandler->className;
 		}
 	}

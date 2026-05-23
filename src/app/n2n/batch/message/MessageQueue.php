@@ -22,4 +22,8 @@ class MessageQueue {
 				->lookupQueueStore($messageClassName)
 				->poll();
 	}
+
+	function clear(): void {
+		$this->queueStorePool->clear();
+	}
 }

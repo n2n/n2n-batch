@@ -74,7 +74,8 @@ class BatchClassRegistry implements ThreadScoped {
 	}
 
 	function createMessageDispatcher(): MessageDispatcher {
-		return new MessageDispatcher($this->batchJobClassNames, $this->createMessageQueue());
+		return new MessageDispatcher($this->batchJobClassNames, $this->createMessageQueue(),
+				$this->n2nContext);
 	}
 
 	/**

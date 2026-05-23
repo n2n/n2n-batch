@@ -27,7 +27,7 @@ use n2n\util\magic\impl\MagicMethodInvoker;
 use n2n\util\ex\ExUtils;
 use n2n\batch\attribute\BatchInterval;
 use n2n\queue\QueueStorePool;
-use n2n\batch\attribute\MessageHandler;
+use n2n\batch\attribute\BatchMessageClass;
 use n2n\reflection\attribute\MethodAttribute;
 use n2n\core\container\N2nContext;
 use n2n\queue\PolledItemRef;
@@ -110,14 +110,14 @@ class TriggerInvestigator {
 
 	private function checkInputs(): bool {
 		$called = false;
-		$invoker = new MessageHandlerInvoker($this->n2nContext);
+		$invoker = new MessageHandlerInvoker($this->lazyBatchObj);
 		foreach ((new BatchJobClassAnalyzer($this->lazyBatchObj->getClass()))
 						 ->findBatchInputAttributes() as $attribute) {
 			$batchInput = $attribute->getInstance();
-			assert($batchInput instanceof MessageHandler);
+			assert($batchInput instanceof BatchMessageClass);
 
 			while (null !== ($ref = $this->messageQueue->poll($batchInput->className))) {
-				$invoker->invoke($this->lazyBatchObj, $attribute->getMethod(), $ref);
+				$invoker->invoke($attribute, $ref);
 				$called = true;
 			}
 		}

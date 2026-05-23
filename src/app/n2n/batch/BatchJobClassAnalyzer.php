@@ -4,7 +4,7 @@ namespace n2n\batch;
 
 use n2n\reflection\attribute\MethodAttribute;
 use n2n\reflection\ReflectionContext;
-use n2n\batch\attribute\MessageHandler;
+use n2n\batch\attribute\BatchMessageClass;
 
 class BatchJobClassAnalyzer {
 
@@ -17,7 +17,7 @@ class BatchJobClassAnalyzer {
 	 */
 	function findBatchInputAttributes(): array {
 		return ReflectionContext::getAttributeSet($this->class)
-				->getMethodAttributesByName(MessageHandler::class);
+				->getMethodAttributesByName(BatchMessageClass::class);
 	}
 
 	function findBatchInputAttribute(string $inputClassName): ?MethodAttribute {
@@ -25,7 +25,7 @@ class BatchJobClassAnalyzer {
 
 		foreach ($methodAttributes as $methodAttribute) {
 			$batchInput = $methodAttribute->getInstance();
-			assert($batchInput instanceof MessageHandler);
+			assert($batchInput instanceof BatchMessageClass);
 
 			if ($batchInput->className === $inputClassName) {
 				return $methodAttribute;
