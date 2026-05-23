@@ -22,7 +22,8 @@ class BatchN2nExtensionTest extends TestCase {
 	function testTrigger() {
 		$results = TestEnv::getN2nContext()->getBatch()->trigger();
 		$this->assertSame(
-				['_onTrigger', '_onNewHour', '_onNewDay', '_onNewWeek', '_onNewMonth','_onNewYear'],
+				['_onTrigger', '_onNewHour', '_onNewDay', '_onNewWeek', '_onNewMonth', '_onNewYear', 'interval5m',
+						'legacyInterval5m'],
 				$results[0]->batchJob->calledMethodNames);
 
 		$results = TestEnv::getN2nContext()->getBatch()->trigger();
@@ -54,13 +55,31 @@ class BatchN2nExtensionTest extends TestCase {
 	/**
 	 * @throws \DateInvalidOperationException
 	 */
+	function testTriggerConfigCustom5mInterval() {
+		$dateTime = new \DateTimeImmutable('2023-09-07 12:12:12');
+
+		$results = TestEnv::getN2nContext()->getBatch()->trigger(new BatchTriggerConfig($dateTime,
+				$dateTime->sub(DateUtils::dateInterval(i: 5)), [BatchJobMock::class]));
+		$this->assertSame(
+				['_onTrigger', 'interval5m', 'legacyInterval5m'],
+				$results[0]->batchJob->calledMethodNames);
+
+		$results = TestEnv::getN2nContext()->getBatch()->trigger(new BatchTriggerConfig($dateTime));
+		$this->assertSame(
+				['_onTrigger'],
+				$results[0]->batchJob->calledMethodNames);
+	}
+
+	/**
+	 * @throws \DateInvalidOperationException
+	 */
 	function testTriggerConfigNewHour() {
 		$dateTime = new \DateTimeImmutable('2023-09-07 12:12:12');
 
 		$results = TestEnv::getN2nContext()->getBatch()->trigger(new BatchTriggerConfig($dateTime,
 				$dateTime->sub(DateUtils::dateInterval(h: 1)), [BatchJobMock::class]));
 		$this->assertSame(
-				['_onTrigger', '_onNewHour'],
+				['_onTrigger', '_onNewHour', 'interval5m', 'legacyInterval5m'],
 				$results[0]->batchJob->calledMethodNames);
 
 		$results = TestEnv::getN2nContext()->getBatch()->trigger(new BatchTriggerConfig($dateTime));
@@ -78,7 +97,7 @@ class BatchN2nExtensionTest extends TestCase {
 		$results = TestEnv::getN2nContext()->getBatch()->trigger(new BatchTriggerConfig($dateTime,
 				$dateTime->sub(DateUtils::dateInterval(d: 1)), [BatchJobMock::class]));
 		$this->assertSame(
-				['_onTrigger', '_onNewHour', '_onNewDay'],
+				['_onTrigger', '_onNewHour', '_onNewDay', 'interval5m', 'legacyInterval5m'],
 				$results[0]->batchJob->calledMethodNames);
 
 		$results = TestEnv::getN2nContext()->getBatch()->trigger(new BatchTriggerConfig($dateTime));
@@ -96,7 +115,7 @@ class BatchN2nExtensionTest extends TestCase {
 		$results = TestEnv::getN2nContext()->getBatch()->trigger(new BatchTriggerConfig($dateTime,
 				$dateTime->sub(DateUtils::dateInterval(d: 7)), [BatchJobMock::class]));
 		$this->assertSame(
-				['_onTrigger', '_onNewHour', '_onNewDay', '_onNewWeek'],
+				['_onTrigger', '_onNewHour', '_onNewDay', '_onNewWeek', 'interval5m', 'legacyInterval5m'],
 				$results[0]->batchJob->calledMethodNames);
 
 		$results = TestEnv::getN2nContext()->getBatch()->trigger(new BatchTriggerConfig($dateTime));
@@ -114,7 +133,7 @@ class BatchN2nExtensionTest extends TestCase {
 		$results = TestEnv::getN2nContext()->getBatch()->trigger(new BatchTriggerConfig($dateTime,
 				$dateTime->sub(DateUtils::dateInterval(m: 1)), [BatchJobMock::class]));
 		$this->assertSame(
-				['_onTrigger', '_onNewHour', '_onNewDay', '_onNewWeek', '_onNewMonth'],
+				['_onTrigger', '_onNewHour', '_onNewDay', '_onNewWeek', '_onNewMonth', 'interval5m', 'legacyInterval5m'],
 				$results[0]->batchJob->calledMethodNames);
 
 		$results = TestEnv::getN2nContext()->getBatch()->trigger(new BatchTriggerConfig($dateTime));
@@ -132,7 +151,8 @@ class BatchN2nExtensionTest extends TestCase {
 		$results = TestEnv::getN2nContext()->getBatch()->trigger(new BatchTriggerConfig($dateTime,
 				$dateTime->sub(DateUtils::dateInterval(y: 1)), [BatchJobMock::class]));
 		$this->assertSame(
-				['_onTrigger', '_onNewHour', '_onNewDay', '_onNewWeek', '_onNewMonth', '_onNewYear'],
+				['_onTrigger', '_onNewHour', '_onNewDay', '_onNewWeek', '_onNewMonth', '_onNewYear', 'interval5m',
+						'legacyInterval5m'],
 				$results[0]->batchJob->calledMethodNames);
 
 		$results = TestEnv::getN2nContext()->getBatch()->trigger(new BatchTriggerConfig($dateTime));

@@ -24,8 +24,13 @@ namespace n2n\batch;
 use n2n\reflection\annotation\MethodAnnotation;
 use n2n\reflection\annotation\MethodAnnotationTrait;
 use n2n\reflection\annotation\AnnotationTrait;
+use n2n\reflection\attribute\legacy\LegacyAnnotation;
+use n2n\batch\attribute\Batch;
 
-class AnnoBatch implements MethodAnnotation {
+/**
+ * @deprecated use {@link Batch}
+ */
+class AnnoBatch implements MethodAnnotation, LegacyAnnotation {
 	use MethodAnnotationTrait, AnnotationTrait;
 	
 	private $interval;
@@ -36,5 +41,13 @@ class AnnoBatch implements MethodAnnotation {
 	
 	public function getInterval(): \DateInterval {
 		return $this->interval;
+	}
+
+	public function getAttributeName(): string {
+		return Batch::class;
+	}
+
+	public function toAttributeInstance(): Batch {
+		return new Batch($this->interval);
 	}
 }

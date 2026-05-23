@@ -25,6 +25,7 @@ use n2n\reflection\ReflectionContext;
 use n2n\util\type\CastUtils;
 use n2n\util\magic\impl\MagicMethodInvoker;
 use n2n\util\ex\ExUtils;
+use n2n\batch\attribute\Batch;
 
 class TriggerInvestigator {
 	const ON_TRIGGER_METHOD = '_onTrigger';
@@ -74,22 +75,21 @@ class TriggerInvestigator {
 	}
 	
 	private function checkIntervals() {
-		$as = ReflectionContext::getAnnotationSet($this->class);
+		$as = ReflectionContext::getAttributeSet($this->class);
 		
-		foreach ($as->getMethodAnnotationsByName(AnnoBatch::class) as $annoBatch) {
-			CastUtils::assertTrue($annoBatch instanceof AnnoBatch);
-			
-			$method = $annoBatch->getAnnotatedMethod();
+		foreach ($as->getMethodAttributesByName(Batch::class) as $batchAttribute) {
+			$method = $batchAttribute->getMethod();
+			$batch = $batchAttribute->getInstance();
+			assert($batch instanceof Batch);
 
 			if ($this->lastTriggeredDateTime !== null) {
-
-				$nextDt = $this->lastTriggeredDateTime->add($annoBatch->getInterval());
+				$nextDt = $this->lastTriggeredDateTime->add($batch->interval);
 				if ($nextDt > $this->now) {
 					continue;
 				}
 			}
 			
-			$method->setAccessible(true);
+//			$method->setAccessible(true);
 			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, $this->lastTriggeredDateTime);
 			$this->magicMethodInvoker->setMethod($method);
 			$this->magicMethodInvoker->invoke($this->batchJob);
