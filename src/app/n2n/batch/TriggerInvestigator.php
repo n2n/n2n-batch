@@ -27,11 +27,13 @@ use n2n\util\magic\impl\MagicMethodInvoker;
 use n2n\util\ex\ExUtils;
 use n2n\batch\attribute\BatchInterval;
 use n2n\queue\QueueStorePool;
-use n2n\batch\attribute\BatchInput;
+use n2n\batch\attribute\MessageHandler;
 use n2n\reflection\attribute\MethodAttribute;
 use n2n\core\container\N2nContext;
 use n2n\queue\PolledItemRef;
 use Throwable;
+use n2n\batch\message\MessageQueue;
+use n2n\batch\message\MessageHandlerInvoker;
 
 class TriggerInvestigator {
 	const ON_TRIGGER_METHOD = '_onTrigger';
@@ -43,13 +45,11 @@ class TriggerInvestigator {
 
 	const LAST_TRIGGERED_ARG = 'lastTriggered';
 
-	private \ReflectionClass $class;
 	private MagicMethodInvoker $magicMethodInvoker;
-	private ?QueueStorePool $queueStorePool;
 	
-	public function __construct(private object $batchJob, private \DateTimeImmutable $now,
-			private ?\DateTimeImmutable $lastTriggeredDateTime, private N2nContext $n2nContext) {
-		$this->class = new \ReflectionClass($this->batchJob);
+	public function __construct(private LazyBatchObj $lazyBatchObj, private \DateTimeImmutable $now,
+			private ?\DateTimeImmutable $lastTriggeredDateTime, private MessageQueue $messageQueue,
+			private N2nContext $n2nContext) {
 		$this->magicMethodInvoker = new MagicMethodInvoker($n2nContext);
 	}
 
@@ -65,17 +65,17 @@ class TriggerInvestigator {
 	}
 	
 	private function check(string $methodName, ?string $dtCheckFormat = null): bool {
-		if (!$this->class->hasMethod($methodName)) {
+		if (!$this->lazyBatchObj->getClass()->hasMethod($methodName)) {
 			return false;
 		}
 
 		if ($this->lastTriggeredDateTime === null || $dtCheckFormat === null
 				|| $this->lastTriggeredDateTime->format($dtCheckFormat) != $this->now->format($dtCheckFormat)) {
 
-			$method = ExUtils::try(fn () => $this->class->getMethod($methodName));
+			$method = ExUtils::try(fn () => $this->lazyBatchObj->getClass()->getMethod($methodName));
 			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, $this->lastTriggeredDateTime);
 			$this->magicMethodInvoker->setMethod($method);
-			$this->magicMethodInvoker->invoke($this->batchJob);
+			$this->magicMethodInvoker->invoke($this->lazyBatchObj->getObject());
 			return true;
 		}
 
@@ -85,7 +85,7 @@ class TriggerInvestigator {
 	private function checkIntervals(): bool {
 		$called = false;
 
-		$as = ReflectionContext::getAttributeSet($this->class);
+		$as = ReflectionContext::getAttributeSet($this->lazyBatchObj->getClass());
 		foreach ($as->getMethodAttributesByName(BatchInterval::class) as $batchAttribute) {
 			$method = $batchAttribute->getMethod();
 			$batch = $batchAttribute->getInstance();
@@ -101,7 +101,7 @@ class TriggerInvestigator {
 //			$method->setAccessible(true);
 			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, $this->lastTriggeredDateTime);
 			$this->magicMethodInvoker->setMethod($method);
-			$this->magicMethodInvoker->invoke($this->batchJob);
+			$this->magicMethodInvoker->invoke($this->lazyBatchObj->getObject());
 			$called = true;
 		}
 
@@ -109,55 +109,19 @@ class TriggerInvestigator {
 	}
 
 	private function checkInputs(): bool {
-		if ($this->queueStorePool === null) {
-			return false;
-		}
-
 		$called = false;
-		foreach ((new BatchJobClassAnalyzer($this->class))->findBatchInputAttributes() as $attribute) {
+		$invoker = new MessageHandlerInvoker($this->n2nContext);
+		foreach ((new BatchJobClassAnalyzer($this->lazyBatchObj->getClass()))
+						 ->findBatchInputAttributes() as $attribute) {
 			$batchInput = $attribute->getInstance();
+			assert($batchInput instanceof MessageHandler);
 
-			$queueStore = $this->queueStorePool->lookupQueueStore($batchInput->className);
-			while (null !== ($ref = $queueStore->poll())) {
-				$this->handleInputAttribute($attribute, $ref);
+			while (null !== ($ref = $this->messageQueue->poll($batchInput->className))) {
+				$invoker->invoke($this->lazyBatchObj, $attribute->getMethod(), $ref);
 				$called = true;
 			}
 		}
 
 		return $called;
 	}
-
-	function isInputObjSupported(object $inputObj): bool {
-		$inputClassName = get_class($inputObj);
-		return null !== (new BatchJobClassAnalyzer($this->class))->findBatchInputAttribute($inputClassName);
-	}
-
-	function checkForInputObj(object $inputObj): bool {
-		$inputClassName = get_class($inputObj);
-		$attribute = (new BatchJobClassAnalyzer($this->class))->findBatchInputAttribute($inputClassName);
-		if ($attribute === null) {
-			return false;
-		}
-
-		$queueStore = $this->queueStorePool->lookupQueueStore($inputClassName);
-		$queueStore->addAndPoll($inputObj);
-
-		$this->handleInputAttribute($attribute, $inputObj);
-		return true;
-	}
-
-
-	private function handleInputAttribute(MethodAttribute $attribute, PolledItemRef $polledItemRef): void {
-		$invoker = new MagicMethodInvoker($this->n2nContext);
-		$invoker->setMethod($attribute->getMethod());
-
-		try {
-			$invoker->invoke($this->batchJob, firstArgs: [$polledItemRef->data]);
-			$polledItemRef->ack();
-		} catch (Throwable $e) {
-			$polledItemRef->reject(true);
-			throw new BatchException('BatchJob was aborted');
-		}
-	}
-
 }

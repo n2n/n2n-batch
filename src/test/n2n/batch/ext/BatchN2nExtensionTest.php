@@ -3,7 +3,7 @@ namespace n2n\batch\ext;
 
 use PHPUnit\Framework\TestCase;
 use n2n\test\TestEnv;
-use n2n\batch\BatchJobRegistry;
+use n2n\batch\BatchClassRegistry;
 use n2n\batch\mock\BatchJobMock;
 use n2n\core\ext\BatchTriggerConfig;
 use n2n\util\DateUtils;
@@ -16,7 +16,7 @@ class BatchN2nExtensionTest extends TestCase {
 	}
 
 	function testConfig(): void {
-		$this->assertSame([BatchJobMock::class], TestEnv::lookup(BatchJobRegistry::class)->getBatchJobClassNames());
+		$this->assertSame([BatchJobMock::class], TestEnv::lookup(BatchClassRegistry::class)->getBatchClassNames());
 	}
 
 	function testTrigger() {

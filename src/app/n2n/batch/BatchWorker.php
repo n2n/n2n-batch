@@ -7,10 +7,13 @@ use n2n\util\magic\MagicObjectUnavailableException;
 use n2n\util\col\ArrayUtils;
 use n2n\core\container\N2nContext;
 use n2n\batch\ext\BatchTriggerResult;
+use n2n\batch\message\MessageQueue;
+use n2n\batch\interval\TriggerTracker;
 
 class BatchWorker {
 
-	function __construct(private array $batchJobClassNames, private TriggerTracker $triggerTracker) {
+	function __construct(private array $batchJobClassNames, private TriggerTracker $triggerTracker,
+			private MessageQueue $messageQueue) {
 		ArgUtils::valArray($this->batchJobClassNames, 'string');
 	}
 
@@ -35,44 +38,21 @@ class BatchWorker {
 		return $this->batchJobClassNames;
 	}
 
-	function triggerBatchJob(string $batchJobClassName, \DateTimeImmutable $now, N2nContext $n2nContext): ?BatchTriggerResult {
-		$this->ensureBatchJobClassNameExists($batchJobClassName);
+	function triggerBatchObj(string $batchClassName, \DateTimeImmutable $now, N2nContext $n2nContext): ?BatchTriggerResult {
+		$this->ensureBatchJobClassNameExists($batchClassName);
 
-		$lastTriggeredDateTime = $this->triggerTracker->getLastTriggered($batchJobClassName);
+		$lastTriggeredDateTime = $this->triggerTracker->getLastTriggered($batchClassName);
 
-		try {
-			$batchJob = $n2nContext->lookup($batchJobClassName);
-		} catch (MagicObjectUnavailableException $e) {
-			throw new BatchException('Invalid BatchJob registered: ' . $batchJobClassName, 0, $e);
-		}
+		$registeredBatchObj = new LazyBatchObj($batchClassName, $n2nContext);
 
-		$triggerInvestigator = new TriggerInvestigator($batchJob, $now, $lastTriggeredDateTime, $n2nContext);
+		$triggerInvestigator = new TriggerInvestigator($registeredBatchObj, $now,
+				$lastTriggeredDateTime, $this->messageQueue, $n2nContext);
 		if (!$triggerInvestigator->checkAll()) {
 			return null;
 		}
 
-		$this->triggerTracker->setLastTriggered($batchJobClassName, $now);
-		return new BatchTriggerResult($batchJob, $n2nContext);
+		$this->triggerTracker->setLastTriggered($batchClassName, $now);
+		return new BatchTriggerResult($registeredBatchObj->getObject(), $n2nContext);
 	}
 
-	function triggerByInput(string $inputClassName): bool {
-		foreach ($this->batchJobClassNames as $batchJobClassName) {
-			try {
-				$attribute = (new BatchJobClassAnalyzer(new \ReflectionClass($batchJobClassName)))
-						->findBatchInputAttribute($inputClassName);
-			} catch (\ReflectionException $e) {
-				throw new BatchException('Invalid BatchJob registered: ' . $batchJobClassName, 0, $e);
-			}
-
-			if ($attribute === null) {
-				continue;
-			}
-
-
-		}
-
-		$this->ensureBatchJobClassNameExists($inputClassName);
-
-
-	}
 }
