@@ -25,7 +25,15 @@ use n2n\reflection\ReflectionContext;
 use n2n\util\type\CastUtils;
 use n2n\util\magic\impl\MagicMethodInvoker;
 use n2n\util\ex\ExUtils;
-use n2n\batch\attribute\Batch;
+use n2n\batch\attribute\BatchInterval;
+use n2n\queue\QueueStorePool;
+use n2n\batch\attribute\BatchMessageClass;
+use n2n\reflection\attribute\MethodAttribute;
+use n2n\core\container\N2nContext;
+use n2n\queue\PolledItemRef;
+use Throwable;
+use n2n\batch\message\MessageQueue;
+use n2n\batch\message\MessageHandlerInvoker;
 
 class TriggerInvestigator {
 	const ON_TRIGGER_METHOD = '_onTrigger';
@@ -37,12 +45,11 @@ class TriggerInvestigator {
 
 	const LAST_TRIGGERED_ARG = 'lastTriggered';
 
-	private \ReflectionClass $class;
 	private MagicMethodInvoker $magicMethodInvoker;
 	
-	public function __construct(private object $batchJob, private \DateTimeImmutable $now,
-			private ?\DateTimeImmutable $lastTriggeredDateTime, private $n2nContext) {
-		$this->class = new \ReflectionClass($this->batchJob);
+	public function __construct(private LazyBatchObj $lazyBatchObj, private \DateTimeImmutable $now,
+			private ?\DateTimeImmutable $lastTriggeredDateTime, private MessageQueue $messageQueue,
+			private N2nContext $n2nContext) {
 		$this->magicMethodInvoker = new MagicMethodInvoker($n2nContext);
 	}
 
@@ -53,34 +60,36 @@ class TriggerInvestigator {
 		$called = $this->check(TriggerInvestigator::NEW_WEEK_METHOD, 'Y-m-W') || $called;
 		$called = $this->check(TriggerInvestigator::NEW_MONTH_METHOD, 'Y-m') || $called;
 		$called = $this->check(TriggerInvestigator::NEW_YEAR_METHOD, 'Y') || $called;
-		return $this->checkIntervals() || $called;
+		$called = $this->checkIntervals() || $called;
+		return $this->checkInputs() || $called;
 	}
 	
 	private function check(string $methodName, ?string $dtCheckFormat = null): bool {
-		if (!$this->class->hasMethod($methodName)) {
+		if (!$this->lazyBatchObj->getClass()->hasMethod($methodName)) {
 			return false;
 		}
 
 		if ($this->lastTriggeredDateTime === null || $dtCheckFormat === null
 				|| $this->lastTriggeredDateTime->format($dtCheckFormat) != $this->now->format($dtCheckFormat)) {
 
-			$method = ExUtils::try(fn () => $this->class->getMethod($methodName));
+			$method = ExUtils::try(fn () => $this->lazyBatchObj->getClass()->getMethod($methodName));
 			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, $this->lastTriggeredDateTime);
 			$this->magicMethodInvoker->setMethod($method);
-			$this->magicMethodInvoker->invoke($this->batchJob);
+			$this->magicMethodInvoker->invoke($this->lazyBatchObj->getObject());
 			return true;
 		}
 
 		return false;
 	}
 	
-	private function checkIntervals() {
-		$as = ReflectionContext::getAttributeSet($this->class);
-		
-		foreach ($as->getMethodAttributesByName(Batch::class) as $batchAttribute) {
+	private function checkIntervals(): bool {
+		$called = false;
+
+		$as = ReflectionContext::getAttributeSet($this->lazyBatchObj->getClass());
+		foreach ($as->getMethodAttributesByName(BatchInterval::class) as $batchAttribute) {
 			$method = $batchAttribute->getMethod();
 			$batch = $batchAttribute->getInstance();
-			assert($batch instanceof Batch);
+			assert($batch instanceof BatchInterval);
 
 			if ($this->lastTriggeredDateTime !== null) {
 				$nextDt = $this->lastTriggeredDateTime->add($batch->interval);
@@ -92,7 +101,27 @@ class TriggerInvestigator {
 //			$method->setAccessible(true);
 			$this->magicMethodInvoker->setParamValue(self::LAST_TRIGGERED_ARG, $this->lastTriggeredDateTime);
 			$this->magicMethodInvoker->setMethod($method);
-			$this->magicMethodInvoker->invoke($this->batchJob);
+			$this->magicMethodInvoker->invoke($this->lazyBatchObj->getObject());
+			$called = true;
 		}
+
+		return $called;
+	}
+
+	private function checkInputs(): bool {
+		$called = false;
+		$invoker = new MessageHandlerInvoker($this->lazyBatchObj);
+		foreach ((new BatchJobClassAnalyzer($this->lazyBatchObj->getClass()))
+						 ->findBatchInputAttributes() as $attribute) {
+			$batchInput = $attribute->getInstance();
+			assert($batchInput instanceof BatchMessageClass);
+
+			while (null !== ($ref = $this->messageQueue->poll($batchInput->className))) {
+				$invoker->invoke($attribute, $ref);
+				$called = true;
+			}
+		}
+
+		return $called;
 	}
 }

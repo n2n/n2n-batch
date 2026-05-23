@@ -3,7 +3,7 @@
 namespace n2n\batch\mock;
 
 use n2n\context\attribute\ThreadScoped;
-use n2n\batch\attribute\Batch;
+use n2n\batch\attribute\BatchInterval;
 use n2n\reflection\annotation\AnnoInit;
 use n2n\batch\AnnoBatch;
 
@@ -39,7 +39,7 @@ class BatchJobMock {
 		$this->calledMethodNames[] = '_onNewYear';
 	}
 
-	#[Batch(new \DateInterval('PT5M'))]
+	#[BatchInterval(new \DateInterval('PT5M'))]
 	function interval5m(): void {
 		$this->calledMethodNames[] = 'interval5m';
 	}
