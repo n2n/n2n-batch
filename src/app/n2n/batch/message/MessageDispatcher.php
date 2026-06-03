@@ -72,15 +72,18 @@ class MessageDispatcher implements TransactionalResource, CommitListener {
 	}
 
 	public function commit(Transaction $transaction): void {
+		$this->tm->unregisterResource($this);
 		$this->inTransaction = false;
 	}
 
 	public function rollBack(Transaction $transaction): void {
+		$this->tm->unregisterResource($this);
 		$this->inTransaction = false;
-		foreach ($this->pendingMessageDispatches as $pendingMessageDispatch) {
+		$pendingMessageDispatches = $this->pendingMessageDispatches;
+		$this->pendingMessageDispatches = [];
+		foreach ($pendingMessageDispatches as $pendingMessageDispatch) {
 			$pendingMessageDispatch->polledItemRef->reject(false);
 		}
-		$this->pendingMessageDispatches = [];
 	}
 
 	public function bindToTransactionManager(TransactionManager $tm): void {
@@ -113,7 +116,6 @@ class MessageDispatcher implements TransactionalResource, CommitListener {
 	}
 
 	public function postClose(Transaction $transaction): void {
-		$this->tm->unregisterResource($this);
 		$this->tm->unregisterCommitListener($this);
 
 		$pendingMessageDispatches = $this->pendingMessageDispatches;
@@ -137,12 +139,11 @@ class PendingMessageDispatch {
 	function __construct(public readonly LazyBatchObj $lazyBatchObj,
 			public readonly MethodAttribute $methodAttribute,
 			public readonly object $message) {
-
 	}
 
 	public private(set) PolledItemRef $polledItemRef {
 		get {
-			IllegalStateException::assertTrue($this->polledItemRef !== null);
+			IllegalStateException::assertTrue(isset($this->polledItemRef));
 			return $this->polledItemRef;
 		}
 	}
@@ -155,7 +156,12 @@ class PendingMessageDispatch {
 		}
 	}
 
+	public private(set) bool $markedAsStored = false;
+
 	function markAsStored(PolledItemRef $polledItemRef): void {
+		IllegalStateException::assertTrue(!$this->markedAsStored, 'Already marked as stored.');
+
+		$this->markedAsStored = true;
 		$this->polledItemRef = $polledItemRef;
 	}
 }
