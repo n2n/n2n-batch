@@ -9,12 +9,13 @@ use n2n\core\ext\BatchTriggerConfig;
 use n2n\util\DateUtils;
 use n2n\batch\mock\UnregisteredBatchJobMock;
 use n2n\batch\mock\MessageMock;
-use n2n\batch\mock\BatchMessageHandlerMock;
+use n2n\batch\mock\AsyncBatchMessageHandlerMock;
 use n2n\batch\mock\FailingNoRequeueMessageMock;
 use n2n\batch\BatchException;
 use n2n\batch\message\MessageQueue;
 use n2n\core\container\err\TransactionStateException;
 use n2n\batch\mock\FailingRequeueMessageMock;
+use n2n\batch\mock\SyncBatchMessageHandlerMock;
 
 class BatchN2nExtensionTest extends TestCase {
 
@@ -36,7 +37,7 @@ class BatchN2nExtensionTest extends TestCase {
 	}
 
 	function testConfig(): void {
-		$this->assertSame([BatchJobMock::class, BatchMessageHandlerMock::class],
+		$this->assertSame([BatchJobMock::class, AsyncBatchMessageHandlerMock::class, SyncBatchMessageHandlerMock::class],
 				TestEnv::lookup(BatchClassRegistry::class)->getBatchClassNames());
 	}
 
@@ -187,7 +188,7 @@ class BatchN2nExtensionTest extends TestCase {
 		TestEnv::getN2nContext()->getBatch()->dispatch(new MessageMock('holeradio1'));
 		$tx->commit();
 
-		$messageMocks = TestEnv::getN2nContext()->lookup(BatchMessageHandlerMock::class)->handledMessageMocks;
+		$messageMocks = TestEnv::getN2nContext()->lookup(AsyncBatchMessageHandlerMock::class)->handledMessageMocks;
 		$this->assertCount(1, $messageMocks);
 		$this->assertSame('holeradio1', $messageMocks[0]->prop);
 	}
