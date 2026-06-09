@@ -16,6 +16,7 @@ use n2n\batch\message\MessageQueue;
 use n2n\core\container\err\TransactionStateException;
 use n2n\batch\mock\FailingRequeueMessageMock;
 use n2n\batch\mock\SyncBatchMessageHandlerMock;
+use n2n\batch\mock\SyncMessageMock;
 
 class BatchN2nExtensionTest extends TestCase {
 
@@ -185,7 +186,8 @@ class BatchN2nExtensionTest extends TestCase {
 
 	function testDispatch() {
 		$tx = TestEnv::createTransaction();
-		TestEnv::getN2nContext()->getBatch()->dispatch(new MessageMock('holeradio1'));
+		$this->assertCount(2,
+				TestEnv::getN2nContext()->getBatch()->dispatch(new MessageMock('holeradio1')));
 		$tx->commit();
 
 		$messageMocks = TestEnv::getN2nContext()->lookup(AsyncBatchMessageHandlerMock::class)->handledMessageMocks;
@@ -253,5 +255,21 @@ class BatchN2nExtensionTest extends TestCase {
 		$this->assertCount(2, $messageMocks);
 		$this->assertSame('holeradio2', $messageMocks[0]->prop);
 		$this->assertSame('holeradio3', $messageMocks[1]->prop);
+	}
+
+	function testSyncDispatch(): void {
+		$tx = TestEnv::createTransaction();
+		$results = TestEnv::getN2nContext()->getBatch()->dispatch(new SyncMessageMock('holeradio2'));
+		$this->assertCount(1, $results);
+		$tx->commit();
+
+		$messageMocks = TestEnv::getN2nContext()->lookup(SyncBatchMessageHandlerMock::class)->handledMessageMocks;
+		$this->assertCount(1, $messageMocks);
+		$this->assertSame('holeradio2', $messageMocks[0]->prop);
+
+		$this->assertEquals(new \DateTime('1985-09-07'), $results[0]->readReturnObj(\DateTime::class));
+
+		$this->expectException(BatchException::class);
+		$results[0]->readReturnObj(\DateTimeImmutable::class);
 	}
 }

@@ -16,4 +16,10 @@ class SyncBatchMessageHandlerMock {
 		$this->handledMessageMocks[] = $messageMock;
 	}
 
+	#[BatchMessageClass(SyncMessageMock::class, async: false)]
+	function handleSyncMessageMock(SyncMessageMock $messageMock): \DateTime {
+		$this->handledMessageMocks[] = $messageMock;
+		return new \DateTime('1985-09-07');
+	}
+
 }
