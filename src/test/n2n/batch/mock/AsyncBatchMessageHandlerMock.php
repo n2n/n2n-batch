@@ -7,7 +7,7 @@ use n2n\context\attribute\ThreadScoped;
 use n2n\util\ex\IllegalStateException;
 
 #[ThreadScoped]
-class BatchMessageHandlerMock {
+class AsyncBatchMessageHandlerMock {
 
 	public array $handledMessageMocks = [];
 

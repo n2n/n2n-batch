@@ -117,7 +117,7 @@ class TriggerInvestigator {
 			assert($batchInput instanceof BatchMessageClass);
 
 			while (null !== ($ref = $this->messageQueue->poll($batchInput->className))) {
-				$invoker->invoke($attribute, $ref);
+				$invoker->invokeAsync($attribute, $ref);
 				$called = true;
 			}
 		}

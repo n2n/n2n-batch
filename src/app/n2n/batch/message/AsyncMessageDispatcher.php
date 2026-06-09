@@ -16,11 +16,11 @@ use n2n\core\container\err\TransactionPhaseException;
 use n2n\batch\LazyBatchObj;
 use n2n\core\container\TransactionManager;
 
-class MessageDispatcher implements TransactionalResource, CommitListener {
+class AsyncMessageDispatcher implements TransactionalResource, CommitListener {
 	private ?TransactionManager $tm = null;
 	private bool $inTransaction = false;
 	/**
-	 * @var PendingMessageDispatch[]
+	 * @var PendingAsyncMessageDispatch[]
 	 */
 	private array $pendingMessageDispatches = [];
 
@@ -28,27 +28,54 @@ class MessageDispatcher implements TransactionalResource, CommitListener {
 
 	}
 
-	function dispatchMessage(object $message, N2nContext $n2nContext): void {
+	/**
+	 * @param object $message
+	 * @param N2nContext $n2nContext
+	 * @return BatchMessageClass[]
+	 */
+	function dispatchMessage(object $message, N2nContext $n2nContext): array {
 		if (!$this->inTransaction) {
 			throw new BatchException('Message can only be dispatched inside a transaction.');
 		}
 
+		$results = [];
 		$messageClassName = get_class($message);
 		foreach ($this->messageHandlerClassNames as $messageHandlerClassName) {
 			$lazyBatchObj = new LazyBatchObj($messageHandlerClassName, $n2nContext);
-			$messageHandlerAttribute = (new BatchJobClassAnalyzer($lazyBatchObj->getClass()))
+			$messageClassAttribute = (new BatchJobClassAnalyzer($lazyBatchObj->getClass()))
 					->findBatchInputAttribute($messageClassName);
-			if ($messageHandlerAttribute === null) {
+			if ($messageClassAttribute === null) {
 				continue;
 			}
 
-			$this->pendingMessageDispatches[] = new PendingMessageDispatch($lazyBatchObj,
-					$messageHandlerAttribute, $message);
-			return;
+			$results[] = $this->dispatchMessageForHandler($lazyBatchObj, $messageClassAttribute, $message);
+		}
+
+		if (!empty($results)) {
+			return $results;
 		}
 
 		throw new BatchException('No message handler registered which could handle messages of type: '
 				. $messageClassName);
+	}
+
+	private function dispatchMessageForHandler(LazyBatchObj $lazyBatchObj, MethodAttribute $messageClassAttribute,
+			object $message): BatchMessageDispatchResult {
+		$messageClass = $messageClassAttribute->getInstance();
+		assert($messageClass instanceof BatchMessageClass);
+
+		if (!$messageClass->async) {
+			$invoker = new MessageHandlerInvoker($lazyBatchObj);
+			return new BatchMessageDispatchResult($lazyBatchObj, $messageClassAttribute, $message,
+					$invoker->invokeSync($messageClassAttribute, $message));
+		}
+
+		$messageClassAttribute->getInstance();
+
+		$this->pendingMessageDispatches[] = new PendingAsyncMessageDispatch($lazyBatchObj,
+				$messageClassAttribute, $message);
+
+		return new BatchMessageDispatchResult($lazyBatchObj, $messageClassAttribute, $message);
 	}
 
 	function release(): void {
@@ -123,7 +150,7 @@ class MessageDispatcher implements TransactionalResource, CommitListener {
 		$this->pendingMessageDispatches = [];
 		foreach ($pendingMessageDispatches as $pendingMessageDispatch) {
 			$invoker = new MessageHandlerInvoker($pendingMessageDispatch->lazyBatchObj);
-			$invoker->invoke(
+			$invoker->invokeAsync(
 					$pendingMessageDispatch->methodAttribute,
 					$pendingMessageDispatch->polledItemRef);
 		}
@@ -134,34 +161,3 @@ class MessageDispatcher implements TransactionalResource, CommitListener {
 	}
 }
 
-class PendingMessageDispatch {
-
-	function __construct(public readonly LazyBatchObj $lazyBatchObj,
-			public readonly MethodAttribute $methodAttribute,
-			public readonly object $message) {
-	}
-
-	public private(set) PolledItemRef $polledItemRef {
-		get {
-			IllegalStateException::assertTrue(isset($this->polledItemRef));
-			return $this->polledItemRef;
-		}
-	}
-
-	public string $messageClassName {
-		get {
-			$messageHandler = $this->methodAttribute->getInstance();
-			assert($messageHandler instanceof BatchMessageClass);
-			return $messageHandler->className;
-		}
-	}
-
-	public private(set) bool $markedAsStored = false;
-
-	function markAsStored(PolledItemRef $polledItemRef): void {
-		IllegalStateException::assertTrue(!$this->markedAsStored, 'Already marked as stored.');
-
-		$this->markedAsStored = true;
-		$this->polledItemRef = $polledItemRef;
-	}
-}
