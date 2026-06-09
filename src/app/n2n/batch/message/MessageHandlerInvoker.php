@@ -16,7 +16,23 @@ class MessageHandlerInvoker {
 	function __construct(private LazyBatchObj $lazyBatchObj) {
 	}
 
-	public function invoke(MethodAttribute $methodAttribute, PolledItemRef $ref): void {
+	public function invokeSync(MethodAttribute $methodAttribute, object $message): mixed {
+		$invoker = new MagicMethodInvoker($this->lazyBatchObj->n2nContext);
+		$invoker->setMethod($methodAttribute->getMethod());
+		$batchMessageClass = $methodAttribute->getInstance();
+		assert($batchMessageClass instanceof BatchMessageClass);
+
+		try {
+			return $invoker->invoke($this->lazyBatchObj->getObject(), firstArgs: [$message]);
+		} catch (\Throwable $e) {
+			throw new BatchException(
+					'Batch message handler interrupted: '
+							. TypeUtils::prettyReflMethName($methodAttribute->getMethod()),
+					previous: $e);
+		}
+	}
+
+	public function invokeAsync(MethodAttribute $methodAttribute, PolledItemRef $ref): void {
 		$invoker = new MagicMethodInvoker($this->lazyBatchObj->n2nContext);
 		$invoker->setMethod($methodAttribute->getMethod());
 		$batchMessageClass = $methodAttribute->getInstance();

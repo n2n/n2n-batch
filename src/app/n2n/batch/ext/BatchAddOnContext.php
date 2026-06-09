@@ -13,6 +13,7 @@ use n2n\batch\message\MessageQueue;
 use n2n\queue\impl\QueueStorePools;
 use n2n\core\VarStore;
 use n2n\core\ext\MessageDispatchConfig;
+use n2n\batch\message\BatchMessageDispatchResult;
 
 class BatchAddOnContext implements N2nBatch, AddOnContext {
 	private ?SimpleMagicContext $simpleMagicContext;
@@ -45,13 +46,18 @@ class BatchAddOnContext implements N2nBatch, AddOnContext {
 		return array_filter($results);
 	}
 
-	function dispatch(object $message, ?MessageDispatchConfig $config = null): void {
+	/**
+	 * @param object $message
+	 * @param MessageDispatchConfig|null $config
+	 * @return BatchMessageDispatchResult[]
+	 */
+	function dispatch(object $message, ?MessageDispatchConfig $config = null): array {
 		$registry = $this->n2nContext->lookup(BatchClassRegistry::class);
 		$messageDispatcher = $registry->createMessageDispatcher();
 
 		$messageDispatcher->bindToTransactionManager($this->n2nContext->getTransactionManager());
 
-		$messageDispatcher->dispatchMessage($message, $this->n2nContext);
+		return $messageDispatcher->dispatchMessage($message, $this->n2nContext);
 	}
 
 	function finalize(): void {
