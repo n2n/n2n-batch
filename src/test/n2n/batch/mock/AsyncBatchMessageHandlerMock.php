@@ -11,17 +11,17 @@ class AsyncBatchMessageHandlerMock {
 
 	public array $handledMessageMocks = [];
 
-	#[BatchMessageClass(MessageMock::class)]
+	#[BatchMessageClass(MessageMock::class, async: true)]
 	function handleMessageMock(MessageMock $messageMock): void {
 		$this->handledMessageMocks[] = $messageMock;
 	}
 
-	#[BatchMessageClass(FailingRequeueMessageMock::class, requeuedOnFailure: true)]
+	#[BatchMessageClass(FailingRequeueMessageMock::class, requeuedOnFailure: true, async: true)]
 	function handleFailingRequeueMessageMock(FailingRequeueMessageMock $messageMock): void {
 		throw new IllegalStateException();
 	}
 
-	#[BatchMessageClass(FailingNoRequeueMessageMock::class, requeuedOnFailure: false)]
+	#[BatchMessageClass(FailingNoRequeueMessageMock::class, requeuedOnFailure: false, async: true)]
 	function handleFailingNoRequeueMessageMock(FailingNoRequeueMessageMock $messageMock): void {
 		throw new IllegalStateException();
 	}
