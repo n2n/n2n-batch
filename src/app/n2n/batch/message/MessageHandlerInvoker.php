@@ -12,17 +12,26 @@ use n2n\batch\LazyBatchObj;
 use n2n\reflection\attribute\MethodAttribute;
 use n2n\util\ex\err\FancyError;
 use n2n\util\ex\err\ConfigurationError;
+use n2n\util\ex\ExUtils;
 
 class MessageHandlerInvoker {
 
 	function __construct(private LazyBatchObj $lazyBatchObj) {
 	}
 
-	public function invokeSync(MethodAttribute $methodAttribute, object $message): mixed {
+	private function createInvoker(MethodAttribute $methodAttribute): MagicMethodInvoker {
 		$invoker = new MagicMethodInvoker($this->lazyBatchObj->n2nContext);
-		$invoker->setMethod($methodAttribute->getMethod());
-		$batchMessageClass = $methodAttribute->getInstance();
-		assert($batchMessageClass instanceof BatchMessageClass);
+		// so mocks and inheritance still works
+		$invoker->setMethod(ExUtils::try(fn () => new \ReflectionMethod($this->lazyBatchObj->getObject(),
+				$methodAttribute->getMethod()->getName())));
+		return $invoker;
+	}
+
+	public function invokeSync(MethodAttribute $methodAttribute, object $message): mixed {
+		$invoker = $this->createInvoker($methodAttribute);
+
+//		$batchMessageClass = $methodAttribute->getInstance();
+//		assert($batchMessageClass instanceof BatchMessageClass);
 
 //		try {
 			return $invoker->invoke($this->lazyBatchObj->getObject(), firstArgs: [$message]);
@@ -37,8 +46,7 @@ class MessageHandlerInvoker {
 	}
 
 	public function invokeAsync(MethodAttribute $methodAttribute, PolledItemRef $ref): void {
-		$invoker = new MagicMethodInvoker($this->lazyBatchObj->n2nContext);
-		$invoker->setMethod($methodAttribute->getMethod());
+		$invoker = $this->createInvoker($methodAttribute);
 		$batchMessageClass = $methodAttribute->getInstance();
 		assert($batchMessageClass instanceof BatchMessageClass);
 
