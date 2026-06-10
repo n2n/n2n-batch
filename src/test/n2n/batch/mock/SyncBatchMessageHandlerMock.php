@@ -2,21 +2,20 @@
 
 namespace n2n\batch\mock;
 
-use n2n\batch\attribute\BatchMessageClass;
 use n2n\context\attribute\ThreadScoped;
-use n2n\util\ex\IllegalStateException;
+use n2n\batch\attribute\BatchSyncMessage;
 
 #[ThreadScoped]
 class SyncBatchMessageHandlerMock {
 
 	public array $handledMessageMocks = [];
 
-	#[BatchMessageClass(MessageMock::class, async: false)]
+	#[BatchSyncMessage(MessageMock::class)]
 	function handleMessageMock(MessageMock $messageMock): void {
 		$this->handledMessageMocks[] = $messageMock;
 	}
 
-	#[BatchMessageClass(SyncMessageMock::class, async: false)]
+	#[BatchSyncMessage(SyncMessageMock::class)]
 	function handleSyncMessageMock(SyncMessageMock $messageMock): \DateTime {
 		$this->handledMessageMocks[] = $messageMock;
 		return new \DateTime('1985-09-07');

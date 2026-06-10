@@ -4,6 +4,7 @@ namespace n2n\batch\message;
 
 use n2n\queue\QueueStorePool;
 use n2n\queue\PolledItemRef;
+use n2n\util\type\TypeUtils;
 
 class MessageQueue {
 
@@ -11,15 +12,20 @@ class MessageQueue {
 
 	}
 
-	function addAndPoll(string $messageClassName, object $message): PolledItemRef {
+	private function createNamespace(\ReflectionMethod $method, string $messageClassName): string {
+		return $method->getDeclaringClass()->getName()
+				. '\\' . $method->getName() . '\\' . $messageClassName;
+	}
+
+	function addAndPoll(\ReflectionMethod $method, string $messageClassName, object $message): PolledItemRef {
 		return $this->queueStorePool
-				->lookupQueueStore($messageClassName)
+				->lookupQueueStore($this->createNamespace($method, $messageClassName))
 				->addAndPoll($message);
 	}
 
-	function poll(string $messageClassName): ?PolledItemRef {
+	function poll(\ReflectionMethod $method, string $messageClassName): ?PolledItemRef {
 		return $this->queueStorePool
-				->lookupQueueStore($messageClassName)
+				->lookupQueueStore($this->createNamespace($method, $messageClassName))
 				->poll();
 	}
 

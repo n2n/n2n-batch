@@ -24,7 +24,7 @@ namespace n2n\batch;
 use n2n\core\container\N2nContext;
 use n2n\context\ThreadScoped;
 use n2n\util\type\ArgUtils;
-use n2n\batch\message\AsyncMessageDispatcher;
+use n2n\batch\message\MessageDispatcher;
 use n2n\batch\message\MessageQueue;
 use n2n\queue\impl\QueueStorePools;
 use n2n\core\VarStore;
@@ -73,8 +73,8 @@ class BatchClassRegistry implements ThreadScoped {
 				->requestDirFsPath(VarStore::CATEGORY_TMP, MessageQueue::class)));
 	}
 
-	function createMessageDispatcher(): AsyncMessageDispatcher {
-		return new AsyncMessageDispatcher($this->batchJobClassNames, $this->createMessageQueue(),
+	function createMessageDispatcher(): MessageDispatcher {
+		return new MessageDispatcher($this->batchJobClassNames, $this->createMessageQueue(),
 				$this->n2nContext);
 	}
 

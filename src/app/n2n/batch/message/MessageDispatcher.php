@@ -7,16 +7,16 @@ use n2n\core\container\Transaction;
 use n2n\core\container\N2nContext;
 use n2n\batch\BatchJobClassAnalyzer;
 use n2n\reflection\attribute\MethodAttribute;
-use n2n\batch\attribute\BatchMessageClass;
-use n2n\queue\PolledItemRef;
+use n2n\batch\attribute\BatchAsyncMessage;
 use n2n\batch\BatchException;
 use n2n\util\ex\IllegalStateException;
 use n2n\core\container\CommitListener;
 use n2n\core\container\err\TransactionPhaseException;
 use n2n\batch\LazyBatchObj;
 use n2n\core\container\TransactionManager;
+use n2n\batch\attribute\BatchSyncMessage;
 
-class AsyncMessageDispatcher implements TransactionalResource, CommitListener {
+class MessageDispatcher implements TransactionalResource, CommitListener {
 	private ?TransactionManager $tm = null;
 	private bool $inTransaction = false;
 	/**
@@ -31,7 +31,7 @@ class AsyncMessageDispatcher implements TransactionalResource, CommitListener {
 	/**
 	 * @param object $message
 	 * @param N2nContext $n2nContext
-	 * @return BatchMessageClass[]
+	 * @return BatchAsyncMessage[]
 	 */
 	function dispatchMessage(object $message, N2nContext $n2nContext): array {
 		if (!$this->inTransaction) {
@@ -42,13 +42,12 @@ class AsyncMessageDispatcher implements TransactionalResource, CommitListener {
 		$messageClassName = get_class($message);
 		foreach ($this->messageHandlerClassNames as $messageHandlerClassName) {
 			$lazyBatchObj = new LazyBatchObj($messageHandlerClassName, $n2nContext);
-			$messageClassAttribute = (new BatchJobClassAnalyzer($lazyBatchObj->getClass()))
-					->findBatchInputAttribute($messageClassName);
-			if ($messageClassAttribute === null) {
-				continue;
-			}
+			$analyzer = new BatchJobClassAnalyzer($lazyBatchObj->getClass());
+			$syncMessageAttribute = $analyzer->findBatchSyncMessageAttribute($messageClassName);
+			$asyncMessageAttribute = $analyzer->findBatchAsyncMessageAttribute($messageClassName);
 
-			$results[] = $this->dispatchMessageForHandler($lazyBatchObj, $messageClassAttribute, $message);
+			array_push($results, ...$this->dispatchMessageForHandler($lazyBatchObj, $syncMessageAttribute,
+					$asyncMessageAttribute, $message));
 		}
 
 		if (!empty($results)) {
@@ -59,23 +58,25 @@ class AsyncMessageDispatcher implements TransactionalResource, CommitListener {
 				. $messageClassName);
 	}
 
-	private function dispatchMessageForHandler(LazyBatchObj $lazyBatchObj, MethodAttribute $messageClassAttribute,
-			object $message): BatchMessageDispatchResult {
-		$messageClass = $messageClassAttribute->getInstance();
-		assert($messageClass instanceof BatchMessageClass);
+	private function dispatchMessageForHandler(LazyBatchObj $lazyBatchObj, ?MethodAttribute $syncMessageAttribute,
+			?MethodAttribute $asyncMessageAttribute, object $message): array {
+		$results = [];
 
-		if (!$messageClass->async) {
+		if ($syncMessageAttribute !== null) {
+			$messageClass = $syncMessageAttribute->getInstance();
+			assert($messageClass instanceof BatchSyncMessage);
 			$invoker = new MessageHandlerInvoker($lazyBatchObj);
-			return new BatchMessageDispatchResult($lazyBatchObj, $messageClassAttribute, $message,
-					$invoker->invokeSync($messageClassAttribute, $message));
+			$results[] = new BatchMessageDispatchResult($lazyBatchObj, $syncMessageAttribute, false, $message,
+					$invoker->invokeSync($syncMessageAttribute, $message));
 		}
 
-		$messageClassAttribute->getInstance();
+		if ($asyncMessageAttribute !== null) {
+			$this->pendingMessageDispatches[] = new PendingAsyncMessageDispatch($lazyBatchObj,
+					$asyncMessageAttribute, $message);
+			$results[] = new BatchMessageDispatchResult($lazyBatchObj, $asyncMessageAttribute, true, $message);
+		}
 
-		$this->pendingMessageDispatches[] = new PendingAsyncMessageDispatch($lazyBatchObj,
-				$messageClassAttribute, $message);
-
-		return new BatchMessageDispatchResult($lazyBatchObj, $messageClassAttribute, $message);
+		return $results;
 	}
 
 	function release(): void {
@@ -93,6 +94,7 @@ class AsyncMessageDispatcher implements TransactionalResource, CommitListener {
 		foreach ($this->pendingMessageDispatches as $pendingMessageDispatch) {
 			$pendingMessageDispatch->markAsStored(
 					$this->messageQueue->addAndPoll(
+							$pendingMessageDispatch->methodAttribute->getMethod(),
 							$pendingMessageDispatch->messageClassName,
 							$pendingMessageDispatch->message));
 		}
@@ -109,7 +111,9 @@ class AsyncMessageDispatcher implements TransactionalResource, CommitListener {
 		$pendingMessageDispatches = $this->pendingMessageDispatches;
 		$this->pendingMessageDispatches = [];
 		foreach ($pendingMessageDispatches as $pendingMessageDispatch) {
-			$pendingMessageDispatch->polledItemRef->reject(false);
+			if ($pendingMessageDispatch->markedAsStored) {
+				$pendingMessageDispatch->polledItemRef->reject(false);
+			}
 		}
 	}
 

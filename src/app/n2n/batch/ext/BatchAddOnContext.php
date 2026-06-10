@@ -14,6 +14,8 @@ use n2n\queue\impl\QueueStorePools;
 use n2n\core\VarStore;
 use n2n\core\ext\MessageDispatchConfig;
 use n2n\batch\message\BatchMessageDispatchResult;
+use n2n\batch\BatchException;
+use n2n\util\type\TypeUtils;
 
 class BatchAddOnContext implements N2nBatch, AddOnContext {
 	private ?SimpleMagicContext $simpleMagicContext;
@@ -60,6 +62,22 @@ class BatchAddOnContext implements N2nBatch, AddOnContext {
 		return $messageDispatcher->dispatchMessage($message, $this->n2nContext);
 	}
 
+	function dispatchUnicast(object $message, ?string $expectedReturnClassName,
+			?MessageDispatchConfig $config = null): mixed {
+		$results = $this->dispatch($message, $config);
+		if (count($results) !== 1) {
+			throw new BatchException('Expected exactly one result, but got multiple results from multiple handlers: '
+					. join(', ',
+							array_map(fn(BatchMessageDispatchResult $r) => TypeUtils::prettyReflMethName($r->method), $results)));
+		}
+
+		if ($expectedReturnClassName !== null) {
+			return $results[0]->readReturnObj($expectedReturnClassName);
+		}
+
+		return null;
+	}
+
 	function finalize(): void {
 
 	}
@@ -71,5 +89,4 @@ class BatchAddOnContext implements N2nBatch, AddOnContext {
 	function lookupMagicObject(string $id, bool $required = true, ?string $contextNamespace = null): mixed {
 		return $this->simpleMagicContext->lookup($id, false, $contextNamespace);
 	}
-
 }
