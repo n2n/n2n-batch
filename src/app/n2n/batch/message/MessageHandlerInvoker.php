@@ -24,16 +24,16 @@ class MessageHandlerInvoker {
 		$batchMessageClass = $methodAttribute->getInstance();
 		assert($batchMessageClass instanceof BatchMessageClass);
 
-		try {
+//		try {
 			return $invoker->invoke($this->lazyBatchObj->getObject(), firstArgs: [$message]);
-		} catch (\Error $e) {
-			throw $e;
-		} catch (\Throwable $e) {
-			throw new BatchException(
-					'Batch message handler interrupted: '
-							. TypeUtils::prettyReflMethName($methodAttribute->getMethod()),
-					previous: $e);
-		}
+//		} catch (\Error $e) {
+//			throw $e;
+//		} catch (\Throwable $e) {
+//			throw new BatchException(
+//					'Batch message handler interrupted: '
+//							. TypeUtils::prettyReflMethName($methodAttribute->getMethod()),
+//					previous: $e);
+//		}
 	}
 
 	public function invokeAsync(MethodAttribute $methodAttribute, PolledItemRef $ref): void {
@@ -53,8 +53,10 @@ class MessageHandlerInvoker {
 		} catch (\Throwable $e) {
 			$ref->reject($batchMessageClass->requeuedOnFailure);
 			throw new BatchException(
-					'Batch message handler interrupted: '
-							. TypeUtils::prettyReflMethName($methodAttribute->getMethod()),
+					'Async batch message handler interrupted: '
+							. TypeUtils::prettyReflMethName($methodAttribute->getMethod())
+							. '; Message was ' . ($batchMessageClass->requeuedOnFailure ? ' requeued' : 'not requeued')
+							. '.',
 					previous: $e);
 		}
 	}
