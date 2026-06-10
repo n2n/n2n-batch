@@ -17,6 +17,7 @@ use n2n\core\container\err\TransactionStateException;
 use n2n\batch\mock\FailingRequeueMessageMock;
 use n2n\batch\mock\SyncBatchMessageHandlerMock;
 use n2n\batch\mock\SyncMessageMock;
+use n2n\batch\mock\AsyncBatchMessageHandlerMulticastMock;
 
 class BatchN2nExtensionTest extends TestCase {
 
@@ -38,7 +39,8 @@ class BatchN2nExtensionTest extends TestCase {
 	}
 
 	function testConfig(): void {
-		$this->assertSame([BatchJobMock::class, AsyncBatchMessageHandlerMock::class, SyncBatchMessageHandlerMock::class],
+		$this->assertSame([BatchJobMock::class, AsyncBatchMessageHandlerMock::class,
+						AsyncBatchMessageHandlerMulticastMock::class, SyncBatchMessageHandlerMock::class],
 				TestEnv::lookup(BatchClassRegistry::class)->getBatchClassNames());
 	}
 
@@ -186,11 +188,15 @@ class BatchN2nExtensionTest extends TestCase {
 
 	function testDispatch() {
 		$tx = TestEnv::createTransaction();
-		$this->assertCount(2,
+		$this->assertCount(3,
 				TestEnv::getN2nContext()->getBatch()->dispatch(new MessageMock('holeradio1')));
 		$tx->commit();
 
 		$messageMocks = TestEnv::getN2nContext()->lookup(AsyncBatchMessageHandlerMock::class)->handledMessageMocks;
+		$this->assertCount(1, $messageMocks);
+		$this->assertSame('holeradio1', $messageMocks[0]->prop);
+
+		$messageMocks = TestEnv::getN2nContext()->lookup(AsyncBatchMessageHandlerMulticastMock::class)->handledMessageMocks;
 		$this->assertCount(1, $messageMocks);
 		$this->assertSame('holeradio1', $messageMocks[0]->prop);
 	}
@@ -201,7 +207,8 @@ class BatchN2nExtensionTest extends TestCase {
 	function testFailingRequeueDispatch() {
 		$messageQueue  = $this->lookupMessageQueue();
 
-		$this->assertNull($messageQueue->poll(FailingRequeueMessageMock::class));
+		$method = new \ReflectionMethod(AsyncBatchMessageHandlerMock::class, 'handleFailingRequeueMessageMock');
+		$this->assertNull($messageQueue->poll($method, FailingRequeueMessageMock::class));
 
 		$tx = TestEnv::createTransaction();
 		try {
@@ -211,7 +218,7 @@ class BatchN2nExtensionTest extends TestCase {
 		} catch (TransactionStateException $e) {
 		}
 
-		$this->assertNotNull($messageQueue->poll(FailingRequeueMessageMock::class));
+		$this->assertNotNull($messageQueue->poll($method, FailingRequeueMessageMock::class));
 	}
 
 	/**
@@ -219,8 +226,9 @@ class BatchN2nExtensionTest extends TestCase {
 	 */
 	function testFailingNoRequeueDispatch() {
 		$messageQueue  = $this->lookupMessageQueue();
+		$method = new \ReflectionMethod(AsyncBatchMessageHandlerMock::class, 'handleFailingNoRequeueMessageMock');
 
-		$this->assertNull($messageQueue->poll(FailingNoRequeueMessageMock::class));
+		$this->assertNull($messageQueue->poll($method, FailingNoRequeueMessageMock::class));
 
 		$tx = TestEnv::createTransaction();
 		try {
@@ -230,7 +238,7 @@ class BatchN2nExtensionTest extends TestCase {
 		} catch (TransactionStateException $e) {
 		}
 
-		$this->assertNull($messageQueue->poll(FailingNoRequeueMessageMock::class));
+		$this->assertNull($messageQueue->poll($method, FailingNoRequeueMessageMock::class));
 	}
 
 	/**
@@ -238,23 +246,34 @@ class BatchN2nExtensionTest extends TestCase {
 	 */
 	function testTriggerMessageHandler(): void {
 		$registry = TestEnv::lookup(BatchClassRegistry::class);
+		$method = new \ReflectionMethod(AsyncBatchMessageHandlerMock::class, 'handleMessageMock');
+		$method2 = new \ReflectionMethod(AsyncBatchMessageHandlerMulticastMock::class, 'handleMessageMock');
 
 		$messageQueue  = $this->lookupMessageQueue();
 
 		$messageQueue
-				->addAndPoll(MessageMock::class, new MessageMock('holeradio2'))
+				->addAndPoll($method, MessageMock::class, new MessageMock('holeradio2'))
 				->reject(true);
 
 		$messageQueue
-				->addAndPoll(MessageMock::class, new MessageMock('holeradio3'))
+				->addAndPoll($method, MessageMock::class, new MessageMock('holeradio3'))
+				->reject(true);
+
+		$messageQueue
+				->addAndPoll($method2, MessageMock::class, new MessageMock('holeradio4'))
 				->reject(true);
 
 		$results = TestEnv::getN2nContext()->getBatch()->trigger();
-		$this->assertCount(2, $results);
+		$this->assertCount(3, $results);
+
 		$messageMocks = $results[1]->batchJob->handledMessageMocks;
 		$this->assertCount(2, $messageMocks);
 		$this->assertSame('holeradio2', $messageMocks[0]->prop);
 		$this->assertSame('holeradio3', $messageMocks[1]->prop);
+
+		$messageMocks = $results[2]->batchJob->handledMessageMocks;
+		$this->assertCount(1, $messageMocks);
+		$this->assertSame('holeradio4', $messageMocks[0]->prop);
 	}
 
 	function testSyncDispatch(): void {
@@ -271,5 +290,19 @@ class BatchN2nExtensionTest extends TestCase {
 
 		$this->expectException(BatchException::class);
 		$results[0]->readReturnObj(\DateTimeImmutable::class);
+	}
+
+	function testSyncDispatchAndExpectSingleReturnObj(): void {
+		$tx = TestEnv::createTransaction();
+		$result = TestEnv::getN2nContext()->getBatch()->dispatchUnicast(
+				new SyncMessageMock('holeradio2'), \DateTime::class);
+		$this->assertInstanceOf(\DateTime::class, $result);
+		$tx->commit();
+
+		$this->assertEquals(new \DateTime('1985-09-07'), $result);
+
+		$this->expectException(BatchException::class);
+		TestEnv::getN2nContext()->getBatch()->dispatchUnicast(new SyncMessageMock('holeradio2'),
+				\DateTimeImmutable::class);
 	}
 }

@@ -27,7 +27,7 @@ use n2n\util\magic\impl\MagicMethodInvoker;
 use n2n\util\ex\ExUtils;
 use n2n\batch\attribute\BatchInterval;
 use n2n\queue\QueueStorePool;
-use n2n\batch\attribute\BatchMessageClass;
+use n2n\batch\attribute\BatchAsyncMessage;
 use n2n\reflection\attribute\MethodAttribute;
 use n2n\core\container\N2nContext;
 use n2n\queue\PolledItemRef;
@@ -112,11 +112,11 @@ class TriggerInvestigator {
 		$called = false;
 		$invoker = new MessageHandlerInvoker($this->lazyBatchObj);
 		foreach ((new BatchJobClassAnalyzer($this->lazyBatchObj->getClass()))
-						 ->findBatchInputAttributes() as $attribute) {
+						 ->findBatchAsyncMessageAttributes() as $attribute) {
 			$batchInput = $attribute->getInstance();
-			assert($batchInput instanceof BatchMessageClass);
+			assert($batchInput instanceof BatchAsyncMessage);
 
-			while (null !== ($ref = $this->messageQueue->poll($batchInput->className))) {
+			while (null !== ($ref = $this->messageQueue->poll($attribute->getMethod(), $batchInput->className))) {
 				$invoker->invokeAsync($attribute, $ref);
 				$called = true;
 			}

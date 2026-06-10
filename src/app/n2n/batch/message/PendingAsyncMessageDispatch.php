@@ -6,7 +6,7 @@ use n2n\util\ex\IllegalStateException;
 use n2n\queue\PolledItemRef;
 use n2n\reflection\attribute\MethodAttribute;
 use n2n\batch\LazyBatchObj;
-use n2n\batch\attribute\BatchMessageClass;
+use n2n\batch\attribute\BatchAsyncMessage;
 
 class PendingAsyncMessageDispatch {
 
@@ -25,7 +25,7 @@ class PendingAsyncMessageDispatch {
 	public string $messageClassName {
 		get {
 			$messageHandler = $this->methodAttribute->getInstance();
-			assert($messageHandler instanceof BatchMessageClass);
+			assert($messageHandler instanceof BatchAsyncMessage);
 			return $messageHandler->className;
 		}
 	}

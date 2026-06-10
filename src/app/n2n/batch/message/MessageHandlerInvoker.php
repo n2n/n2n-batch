@@ -3,7 +3,7 @@
 namespace n2n\batch\message;
 
 use n2n\core\container\N2nContext;
-use n2n\batch\attribute\BatchMessageClass;
+use n2n\batch\attribute\BatchAsyncMessage;
 use n2n\util\magic\impl\MagicMethodInvoker;
 use n2n\queue\PolledItemRef;
 use n2n\batch\BatchException;
@@ -13,6 +13,7 @@ use n2n\reflection\attribute\MethodAttribute;
 use n2n\util\ex\err\FancyError;
 use n2n\util\ex\err\ConfigurationError;
 use n2n\util\ex\ExUtils;
+use n2n\batch\attribute\BatchSyncMessage;
 
 class MessageHandlerInvoker {
 
@@ -48,7 +49,7 @@ class MessageHandlerInvoker {
 	public function invokeAsync(MethodAttribute $methodAttribute, PolledItemRef $ref): void {
 		$invoker = $this->createInvoker($methodAttribute);
 		$batchMessageClass = $methodAttribute->getInstance();
-		assert($batchMessageClass instanceof BatchMessageClass);
+		assert($batchMessageClass instanceof BatchAsyncMessage);
 
 		try {
 			$this->valReturn(
@@ -77,9 +78,8 @@ class MessageHandlerInvoker {
 		throw new ConfigurationError(TypeUtils::prettyReflMethName($methodAttribute->getMethod())
 				. ' is configured as async message handler and returned a value of type '
 				. TypeUtils::getTypeInfo($returnValue)
-				. ' but async message handlers must no return a result. Change '
-				. TypeUtils::prettyPropName(BatchMessageClass::class, 'async')
-				. ' attribute to false if you want it handled synchronously and being able to return a result.');
+				. ' but async message handlers must no return a result. Change attribute to '
+				. BatchSyncMessage::class . ' if you want it handled synchronously and being able to return a result.');
 	}
 
 }
