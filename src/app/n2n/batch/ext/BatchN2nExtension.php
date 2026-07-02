@@ -11,7 +11,7 @@ class BatchN2nExtension implements \n2n\core\ext\N2nExtension {
 	public function __construct(AppConfig $appConfig, AppCache $appCache) {
 	}
 
-	function setUp(AppN2nContext $appN2nContext): void {
+	function applyToN2nContext(AppN2nContext $appN2nContext): void {
 
 	}
 }
