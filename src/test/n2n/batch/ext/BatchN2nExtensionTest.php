@@ -18,6 +18,7 @@ use n2n\batch\mock\FailingRequeueMessageMock;
 use n2n\batch\mock\SyncBatchMessageHandlerMock;
 use n2n\batch\mock\SyncMessageMock;
 use n2n\batch\mock\AsyncBatchMessageHandlerMulticastMock;
+use n2n\util\ex\IllegalStateException;
 
 class BatchN2nExtensionTest extends TestCase {
 
@@ -216,6 +217,9 @@ class BatchN2nExtensionTest extends TestCase {
 			$tx->commit();
 			$this->fail(TransactionStateException::class . ' expected');
 		} catch (TransactionStateException $e) {
+			$e = $e->getPrevious();
+			$this->assertStringContainsString('Async batch message handler interrupted', $e->getMessage());
+			$this->assertInstanceOf(IllegalStateException::class, $e->getPrevious()->getPrevious());
 		}
 
 		$this->assertNotNull($messageQueue->poll($method, FailingRequeueMessageMock::class));

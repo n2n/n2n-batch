@@ -19,13 +19,13 @@ class MessageQueue {
 
 	function addAndPoll(\ReflectionMethod $method, string $messageClassName, object $message): PolledItemRef {
 		return $this->queueStorePool
-				->lookupQueueStore($this->createNamespace($method, $messageClassName))
+				->lookupQueueStore($this->createNamespace($method, $messageClassName), $messageClassName)
 				->addAndPoll($message);
 	}
 
 	function poll(\ReflectionMethod $method, string $messageClassName): ?PolledItemRef {
 		return $this->queueStorePool
-				->lookupQueueStore($this->createNamespace($method, $messageClassName))
+				->lookupQueueStore($this->createNamespace($method, $messageClassName), $messageClassName)
 				->poll();
 	}
 
