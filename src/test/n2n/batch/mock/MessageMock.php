@@ -2,7 +2,7 @@
 
 namespace n2n\batch\mock;
 
-class MessageMock {
+final class MessageMock {
 
 	function __construct(public string $prop) {}
 
